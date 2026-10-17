@@ -1,6 +1,6 @@
 {
   "name": "humanforge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open-source avatar SDK for React and React Native: realistic MakeHuman-based humans (CC0) plus a tiny procedural low-poly mode.",
   "license": "MIT",
   "author": "abdulrehman043",
