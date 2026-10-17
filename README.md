@@ -7,7 +7,7 @@ avatar builders such as MetaPerson Creator. It has two modes:
 | --- | --- | --- |
 | Look | Photoreal skin, eyes, hair cards, clothes | Flat-colored, procedural |
 | Base | MakeHuman / MPFB2 human (CC0), 26.7k-triangle body | three.js primitives, 7–11k triangles |
-| Customization | 11 macro + 57 detail morph sliders, 20 skins, 9 eye colors, 12 brows, 4 lashes, 10 hairstyles, 18 outfits and shoes | 30+ options |
+| Customization | 11 macro + 57 detail morph sliders, 20 skins, 9 eye colors, 12 brows, 4 lashes, 19 hairstyles, 28 outfits, 6 shoes | 30+ options |
 | Rig | 52-bone **Mixamo** skeleton with skin weights (clothes and hair follow) | none |
 | Face animation | 34 FACS blendshapes with **ARKit names** (`jawOpen`, `mouthSmile`, `eyeBlinkLeft`, …) | none |
 | Download | ~1.4 MB one-time core + ~0.3–0.8 MB per look (gzipped, cached on device) | 0 (code only) |
@@ -25,8 +25,19 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/makehumancomm
 cd mpfb2 && git sparse-checkout set src/mpfb/data && cd ..
 curl -LO https://files2.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
 unzip makehuman_system_assets_cc0.zip -d mh_assets
-npm run build:human -- mpfb2/src/mpfb/data mh_assets      # -> assets/human (~14 MB, all options)
+# CC0 community packs: extra hairstyles, dresses and suits (the items listed in tools/extra-assets.json)
+for p in hair01 dress01 suits01; do
+  curl -LO https://files2.makehumancommunity.org/asset_packs/$p/${p}_cc0.zip && unzip -q ${p}_cc0.zip -d mh_$p
+done
+npm run build:human -- mpfb2/src/mpfb/data mh_assets \
+  --extra mh_hair01 --extra mh_dress01 --extra mh_suits01  # -> assets/human (~26 MB, all options)
 ```
+
+Leave out the `--extra` packs for the system set only (~14 MB). Every item loads on demand, so
+the size is what you host, not what each user downloads. To add other community items, put
+their ids in `tools/extra-assets.json` (with author, license and source) and their labels in
+`src/human/catalog.ts`. `demo/wardrobe.html` renders a contact sheet of hairstyles or outfits
+for comparing them.
 
 Host `assets/human/` on any static host or CDN (S3, Cloudflare R2, GitHub Pages…). No server
 compression is needed: binaries are pre-gzipped and decoded in JS by `fflate`.
@@ -263,10 +274,13 @@ npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
   shipping.
 - **Selfie fit:** verified in Chrome with public-domain portraits (web path). The React Native
   landmark path is documented but not implemented. See "Selfie to avatar" for its limits.
-- **Wardrobe:** hairstyles and clothes are limited to the CC0 MakeHuman system packs (10 hairstyles,
-  12 outfits, 6 shoes). They are dated next to commercial avatar SDKs: hair is rendered with soft
-  two-pass cards, but the meshes themselves are 2014-era. More CC0
-  packs, or your own `.mhclo` assets, can be added through `tools/build-human.ts`. There's no hijab
+- **Wardrobe:** the CC0 MakeHuman system packs (10 hairstyles, 12 outfits, 6 shoes) plus CC0
+  community items: 8 women's hairstyles (bobs, bangs, a bun, long and layered cuts), 1 men's style,
+  10 dresses and 3 women's and 3 men's suits (see `LICENSE.ASSETS.md`,
+  [before/after](demo/hair-compare.jpg)). They are still behind commercial avatar SDKs: hair is
+  rendered with soft two-pass cards on 2014–2021-era community meshes. Separate tops, skirts and
+  trousers aren't offered because the editor has a single outfit slot. More CC0 packs, or your
+  own `.mhclo` assets, can be added through `tools/build-human.ts --extra`. There's no hijab
   or kufi in the realistic set yet.
 - **Hair quality:** hair uses alpha-tested cards, so the edges are crisper with MSAA (`antialias: true`).
 
@@ -275,7 +289,8 @@ npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
 - Code: MIT.
 - Human assets (base mesh, targets, skins, hair, clothes, rig, weights, expression units): CC0 1.0,
   from the [MakeHuman](http://www.makehumancommunity.org) project and
-  [MPFB2](https://github.com/makehumancommunity/mpfb2). Credit is appreciated but not required.
+  [MPFB2](https://github.com/makehumancommunity/mpfb2), plus CC0 community hair and clothes listed
+  per item (author, source) in [LICENSE.ASSETS.md](LICENSE.ASSETS.md). Credit is appreciated but not required.
 - Selfie fitting: MediaPipe Face Landmarker and its canonical face mesh are Apache-2.0 (Google).
   `src/human/faceMap.ts` contains vertex indices and averaged landmark positions derived from them.
   The model and WASM are downloaded at runtime and aren't bundled.
