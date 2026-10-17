@@ -8,13 +8,13 @@
 //   editor.normalize(savedConfig) -> clamps/repairs any config to the options (use on load)
 import { DEFAULT_HUMAN, HumanConfig, HumanManifest } from './runtime';
 import { DETAIL_SLIDERS, MACRO_SLIDERS } from './sliders';
-import { EYE_LABELS, EYE_SWATCH, HUMAN_HAIR_COLORS, SKIN_TINTS, clothingInfo, fits, hairInfo, skinInfo } from './catalog';
+import { EYE_LABELS, EYE_SWATCH, GARMENT_COLORS, HUMAN_HAIR_COLORS, SKIN_TINTS, clothingInfo, fits, hairInfo, skinInfo } from './catalog';
 
 export type EditorGender = 'female' | 'male' | 'any';
-export type SectionId = 'body' | 'face' | 'skin' | 'eyes' | 'brows' | 'nose' | 'mouth' | 'ears' | 'hair' | 'outfit' | 'shoes' | 'hat';
-export type ItemSlot = 'hair' | 'outfit' | 'shoes' | 'hat' | 'skin' | 'eyes' | 'eyebrows' | 'eyelashes';
+export type SectionId = 'body' | 'face' | 'skin' | 'eyes' | 'brows' | 'nose' | 'mouth' | 'ears' | 'hair' | 'headwear' | 'outfit' | 'shoes' | 'hat';
+export type ItemSlot = 'hair' | 'headwear' | 'outfit' | 'shoes' | 'hat' | 'skin' | 'eyes' | 'eyebrows' | 'eyelashes';
 
-export const ALL_SECTIONS: SectionId[] = ['face', 'skin', 'eyes', 'brows', 'nose', 'mouth', 'ears', 'hair', 'body', 'outfit', 'shoes', 'hat'];
+export const ALL_SECTIONS: SectionId[] = ['face', 'skin', 'eyes', 'brows', 'nose', 'mouth', 'ears', 'hair', 'headwear', 'body', 'outfit', 'shoes', 'hat'];
 
 export interface HumanEditorOptions {
   /** Lock the avatar to one gender: hides the gender slider and filters hair, clothes and skins. Default 'any'. */
@@ -28,9 +28,9 @@ export interface HumanEditorOptions {
   /** Allowed item ids per slot (default: everything that fits the gender). */
   items?: Partial<Record<ItemSlot, string[]>>;
   /** Color palettes. */
-  colors?: { hair?: string[]; eyebrows?: string[]; skinTint?: string[] };
-  /** Slots that may be empty ("None" option). Default: hat and eyebrows. */
-  optional?: Partial<Record<'hair' | 'hat' | 'eyebrows' | 'shoes', boolean>>;
+  colors?: { hair?: string[]; eyebrows?: string[]; skinTint?: string[]; garments?: string[] };
+  /** Slots that may be empty ("None" option). Default: hat, headwear and eyebrows. */
+  optional?: Partial<Record<'hair' | 'hat' | 'headwear' | 'eyebrows' | 'shoes', boolean>>;
   /** Max magnitude of face/body detail sliders (0..1). Lower keeps faces more natural. Default 1. */
   detailRange?: number;
   /** Starting values (merged over the gender's default look). */
@@ -64,9 +64,12 @@ export interface HumanEditorModel {
 
 const SECTION_LABELS: Record<SectionId, string> = {
   body: 'Body', face: 'Face', skin: 'Skin', eyes: 'Eyes', brows: 'Brows', nose: 'Nose', mouth: 'Mouth', ears: 'Ears',
-  hair: 'Hair', outfit: 'Outfit', shoes: 'Shoes', hat: 'Hat',
+  hair: 'Hair', headwear: 'Headwear', outfit: 'Outfit', shoes: 'Shoes', hat: 'Hat',
 };
-const FACE_SECTIONS: SectionId[] = ['face', 'skin', 'eyes', 'brows', 'nose', 'mouth', 'ears', 'hair', 'hat'];
+const FACE_SECTIONS: SectionId[] = ['face', 'skin', 'eyes', 'brows', 'nose', 'mouth', 'ears', 'hair', 'headwear', 'hat'];
+type WearSlot = 'outfit' | 'shoes' | 'hat' | 'headwear';
+/** Slots that can't be worn together: choosing one takes off the other. */
+const CONFLICTS: Partial<Record<WearSlot, WearSlot>> = { hat: 'headwear', headwear: 'hat' };
 const BROW_SLIDERS = ['browHeight', 'browAngle', 'browDepth'];
 
 const GENDER_DEFAULTS: Record<'female' | 'male', Partial<HumanConfig>> = {
@@ -88,7 +91,7 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
   const include = options.include ? new Set(options.include) : null;
   const range = Math.min(1, Math.max(0, options.detailRange ?? 1));
   const label = (id: string, fallback: string) => options.labels?.[id] ?? fallback;
-  const optional = { hat: true, eyebrows: true, hair: false, shoes: false, ...options.optional };
+  const optional = { hat: true, headwear: true, eyebrows: true, hair: false, shoes: false, ...options.optional };
 
   // ---- allowed items
   const restrict = (slot: ItemSlot, ids: string[]) => {
@@ -96,9 +99,10 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
     return only ? ids.filter((id) => only.includes(id)) : ids;
   };
   const clothes = manifest.proxies.filter((p) => p.kind === 'clothes').map((p) => p.id);
-  const bySlot = (slot: 'outfit' | 'shoes' | 'hat') => clothes.filter((id) => clothingInfo(id).slot === slot && fits(clothingInfo(id).fit, gender));
+  const bySlot = (slot: WearSlot) => clothes.filter((id) => clothingInfo(id).slot === slot && fits(clothingInfo(id).fit, gender));
   const allowed: Record<ItemSlot, string[]> = {
     hair: restrict('hair', manifest.proxies.filter((p) => p.kind === 'hair').map((p) => p.id).filter((id) => fits(hairInfo(id).fit, gender))),
+    headwear: restrict('headwear', bySlot('headwear')),
     outfit: restrict('outfit', bySlot('outfit')),
     shoes: restrict('shoes', bySlot('shoes')),
     hat: restrict('hat', bySlot('hat')),
@@ -113,6 +117,9 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
   const hairColors = options.colors?.hair ?? HUMAN_HAIR_COLORS.map((h) => h.color);
   const browColors = options.colors?.eyebrows ?? hairColors;
   const tints = options.colors?.skinTint ?? SKIN_TINTS;
+  const garmentColors = options.colors?.garments ?? GARMENT_COLORS.map((g) => g.color);
+  const tintable = (id: string) => !!manifest.proxies.find((p) => p.kind === 'clothes' && p.id === id)?.tintable;
+  const defaultColor = (id: string | undefined) => manifest.proxies.find((p) => p.kind === 'clothes' && p.id === id)?.color;
 
   // ---- controls
   const shown = (section: SectionId, id: string) => !exclude.has(section) && !exclude.has(`${section}.${id}`) && !exclude.has(id) && (!include || include.has(`${section}.${id}`) || include.has(id));
@@ -132,10 +139,16 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
   const color = (id: string, lbl: string, colors: string[], value: ColorControl['value'], apply: ColorControl['apply']): ColorControl =>
     ({ kind: 'color', id, label: label(id, lbl), colors, value, apply });
   const none = (on: boolean): ChoiceOption[] => (on ? [{ id: null, label: label('none', 'None') }] : []);
-  const clothingChoice = (slot: 'outfit' | 'shoes' | 'hat', lbl: string, canBeEmpty: boolean) => choice('style', lbl,
+  const worn = (c: HumanConfig, slot: WearSlot) => c.clothes.find((id) => clothingInfo(id).slot === slot);
+  const clothingChoice = (slot: WearSlot, lbl: string, canBeEmpty: boolean) => choice('style', lbl,
     [...none(canBeEmpty), ...allowed[slot].map((id) => ({ id, label: label(id, clothingInfo(id).label) }))],
-    (c) => c.clothes.find((id) => clothingInfo(id).slot === slot) ?? null,
-    (c, v) => ({ ...c, clothes: [...c.clothes.filter((id) => clothingInfo(id).slot !== slot), ...(v ? [v] : [])] }));
+    (c) => worn(c, slot) ?? null,
+    (c, v) => ({ ...c, clothes: [...c.clothes.filter((id) => clothingInfo(id).slot !== slot && !(v && clothingInfo(id).slot === CONFLICTS[slot])), ...(v ? [v] : [])] }));
+  /** Fabric color of the tintable garment in a slot (only shown when the slot offers one). */
+  const garmentColor = (slot: WearSlot): EditorControl[] => (allowed[slot].some(tintable)
+    ? [color('color', 'Color', garmentColors, (c) => c.garmentColors?.[slot] ?? defaultColor(worn(c, slot)) ?? garmentColors[0],
+      (c, v) => ({ ...c, garmentColors: { ...c.garmentColors, [slot]: v } }))]
+    : []);
 
   const build: Record<SectionId, () => EditorControl[]> = {
     face: () => [
@@ -174,7 +187,8 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
       ...(gender !== 'male' ? [macro('cupSize', 'Bust'), macro('firmness', 'Firmness')] : []),
       ...DETAIL_SLIDERS.filter((d) => d.group === 'body').map((d) => detail(d.id)),
     ],
-    outfit: () => [clothingChoice('outfit', 'Outfit', false)],
+    headwear: () => [clothingChoice('headwear', 'Headwear', optional.headwear), ...garmentColor('headwear')],
+    outfit: () => [clothingChoice('outfit', 'Outfit', false), ...garmentColor('outfit')],
     shoes: () => [clothingChoice('shoes', 'Shoes', optional.shoes)],
     hat: () => [clothingChoice('hat', 'Hat', optional.hat)],
   };
@@ -183,7 +197,7 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
   for (const id of options.sections ?? ALL_SECTIONS) {
     if (exclude.has(id)) continue;
     const controls = build[id]().filter((ctl) => shown(id, ctl.id)).filter((ctl) => ctl.kind !== 'choice' || ctl.options.length > 1 || ctl.options[0]?.id !== null);
-    if ((id === 'outfit' || id === 'shoes' || id === 'hat') && !allowed[id].length) continue;
+    if ((id === 'outfit' || id === 'shoes' || id === 'hat' || id === 'headwear') && !allowed[id].length) continue;
     if (controls.length) sections.push({ id, label: label(id, SECTION_LABELS[id]), framing: FACE_SECTIONS.includes(id) ? 'face' : 'body', controls });
   }
 
@@ -202,14 +216,16 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
     c.hair = c.hair === null && optional.hair ? null : pick(c.hair, allowed.hair, base.hair);
     c.eyebrows = c.eyebrows === null && optional.eyebrows ? null : pick(c.eyebrows, allowed.eyebrows, base.eyebrows);
     c.eyelashes = c.eyelashes === null ? null : pick(c.eyelashes, allowed.eyelashes, base.eyelashes);
-    const wear = (slot: 'outfit' | 'shoes' | 'hat', canBeEmpty: boolean) => {
+    const wear = (slot: WearSlot, canBeEmpty: boolean) => {
       const cur = c.clothes.find((id) => clothingInfo(id).slot === slot);
       const fallback = base.clothes.find((id) => clothingInfo(id).slot === slot);
       if (!cur && canBeEmpty) return [];
       const v = pick(cur, allowed[slot], fallback);
       return v ? [v] : [];
     };
-    c.clothes = [...wear('outfit', false), ...wear('shoes', optional.shoes), ...wear('hat', true)];
+    const headwear = wear('headwear', true);
+    c.clothes = [...wear('outfit', false), ...wear('shoes', optional.shoes), ...headwear, ...(headwear.length ? [] : wear('hat', true))];
+    if (c.garmentColors) c.garmentColors = Object.fromEntries(Object.entries(c.garmentColors).filter(([, v]) => typeof v === 'string'));
     return c;
   }
 

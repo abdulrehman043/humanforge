@@ -48,6 +48,7 @@
   "scripts": {
     "demo": "vite",
     "build:human": "tsx tools/build-human.ts",
+    "build:garments": "tsx tools/build-garments.mts",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/smoke.ts && tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts && tsx scripts/editor-test.mts",
     "build:facemap": "tsx tools/build-facemap.mts"

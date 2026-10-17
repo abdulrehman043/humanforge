@@ -6,11 +6,12 @@
 // (TextureLoader on the web by default; see src/native/humanTextures.ts for React Native).
 import {
   Bone, BufferAttribute, BufferGeometry, DoubleSide, FrontSide, Group, Material, Matrix4, MeshStandardMaterial,
-  Quaternion, SRGBColorSpace, Skeleton, SkinnedMesh, Texture, TextureLoader, Vector3,
+  Quaternion, RepeatWrapping, SRGBColorSpace, Skeleton, SkinnedMesh, Texture, TextureLoader, Vector3,
 } from 'three';
 import { gunzipSync } from 'fflate';
 import { DETAIL_SLIDERS } from './sliders';
 import { GlbPrimitive, readGlb, toFloat } from './glb';
+import { clothingInfo } from './catalog';
 
 // ---------------------------------------------------------------- config
 export interface HumanConfig {
@@ -39,6 +40,8 @@ export interface HumanConfig {
   hair: string | null;
   hairColor: string;
   clothes: string[];
+  /** Colors of tintable garments by clothing slot ('outfit', 'headwear'...); unset = the garment's default. */
+  garmentColors?: Record<string, string>;
 }
 
 export const DEFAULT_HUMAN: HumanConfig = {
@@ -53,6 +56,13 @@ export interface ProxyMeta {
   id: string; kind: string; file: string; triangles: number; transparent: boolean; tintable: boolean; zDepth: number;
   deleteVerts?: [number, number][]; scale: [number, number, number][];
   texture?: string; normalTexture?: string; textureSize: number; doubleSided: boolean;
+  /** Default tint for tintable garments. */
+  color?: string;
+  /** Headwear that covers the hair: the hair proxy is not shown while it is worn. */
+  hidesHair?: boolean;
+  roughness?: number;
+  /** Texture coordinates are in tiles (repeat wrapping). */
+  tileable?: boolean;
 }
 export interface HumanManifest {
   vertexCount: number;
@@ -233,7 +243,23 @@ function geometryFrom(prim: GlbPrimitive, joints: string, weights: string) {
   g.setAttribute('skinIndex', new BufferAttribute(asU16(prim.attributes[joints]), 4));
   g.setAttribute('skinWeight', new BufferAttribute(toFloat(prim.attributes[weights]), 4));
   g.setIndex(new BufferAttribute(prim.index, 1));
+  if (prim.attributes.COLOR_0) g.setAttribute('color', new BufferAttribute(toFloat(prim.attributes.COLOR_0), prim.attributes.COLOR_0.itemSize));
   return g;
+}
+
+/**
+ * Vertices split only for texture seams share refs/weights/offsets. Pairs (dup, first) so
+ * normals can be averaged across the seam after computeVertexNormals.
+ */
+function seamPairs(refs: Uint16Array, refw: Float32Array, offs: Float32Array) {
+  const first = new Map<string, number>(), pairs: number[] = [];
+  for (let i = 0; i < refs.length / 3; i++) {
+    let k = '';
+    for (let c = 0; c < 3; c++) k += `${refs[i * 3 + c]},${Math.round(refw[i * 3 + c] * 1e4)},${Math.round(offs[i * 3 + c] * 1e5)},`;
+    const f = first.get(k);
+    if (f === undefined) first.set(k, i); else pairs.push(i, f);
+  }
+  return Uint32Array.from(pairs);
 }
 
 /**
@@ -248,7 +274,7 @@ function hairShading(m: MeshStandardMaterial) {
   m.customProgramCacheKey = () => 'humanforge-hair';
 }
 
-interface ProxyInstance { meta: ProxyMeta; mesh: SkinnedMesh; soft?: SkinnedMesh; refs: Uint16Array; refw: Float32Array; offs: Float32Array }
+interface ProxyInstance { meta: ProxyMeta; mesh: SkinnedMesh; soft?: SkinnedMesh; refs: Uint16Array; refw: Float32Array; offs: Float32Array; seams?: Uint32Array }
 
 export class HumanAvatar {
   readonly group = new Group();
@@ -318,7 +344,8 @@ export class HumanAvatar {
     if (c.eyelashes) wanted.set('eyelashes', `eyelashes-${c.eyelashes}`);
     wanted.set('teeth', 'teeth-teeth_base');
     wanted.set('tongue', 'tongue-tongue01');
-    if (c.hair) wanted.set('hair', `hair-${c.hair}`);
+    const meta = (id: string) => this.pkg.manifest.proxies.find((p) => p.kind === 'clothes' && p.id === id);
+    if (c.hair && !c.clothes.some((id) => meta(id)?.hidesHair)) wanted.set('hair', `hair-${c.hair}`);
     c.clothes.forEach((id) => wanted.set(`clothes:${id}`, `clothes-${id}`));
     const loads = [...wanted.entries()].map(async ([slot, id]) => {
       const cur = this.proxies.get(slot);
@@ -347,6 +374,7 @@ export class HumanAvatar {
       if (slot === 'hair') { m.color.set(c.hairColor); (p.soft?.material as MeshStandardMaterial | undefined)?.color.set(c.hairColor); }
       if (slot === 'eyebrows') m.color.set(c.eyebrowColor);
       if (slot === 'eyes' && m.map !== eyeTex) { m.map = eyeTex; m.needsUpdate = true; }
+      if (p.meta.kind === 'clothes' && p.meta.tintable) m.color.set(c.garmentColors?.[clothingInfo(p.meta.id).slot] ?? p.meta.color ?? '#ffffff');
     }
     this.reshape();
   }
@@ -396,9 +424,11 @@ export class HumanAvatar {
     const refs = asU16(prim.attributes._REFS), refw = toFloat(prim.attributes._REFW), offs = toFloat(prim.attributes._OFFS);
     const mat = new MeshStandardMaterial({
       map, normalMap, metalness: 0,
-      roughness: meta.kind === 'eyes' ? 0.15 : meta.kind === 'hair' ? 0.55 : 0.8,
+      roughness: meta.roughness ?? (meta.kind === 'eyes' ? 0.15 : meta.kind === 'hair' ? 0.55 : 0.8),
       side: meta.doubleSided ? DoubleSide : FrontSide,
+      vertexColors: !!geo.getAttribute('color'),
     });
+    if (meta.tileable) for (const t of [map, normalMap]) if (t && t.wrapS !== RepeatWrapping) { t.wrapS = t.wrapT = RepeatWrapping; t.needsUpdate = true; }
     let soft: SkinnedMesh | undefined;
     if (meta.kind === 'hair') {
       // Two passes: a solid core (alpha-tested, writes depth, so strands sort correctly) and a
@@ -432,7 +462,8 @@ export class HumanAvatar {
       mesh.morphTargetDictionary = this.body.morphTargetDictionary;
       mesh.morphTargetInfluences = [...(this.body.morphTargetInfluences ?? [])];
     }
-    return { meta, mesh, soft, refs, refw, offs };
+    const seams = meta.kind === 'clothes' ? seamPairs(refs, refw, offs) : undefined;
+    return { meta, mesh, soft, refs, refw, offs, seams: seams?.length ? seams : undefined };
   }
 
   private removeProxy(slot: string) {
@@ -497,6 +528,11 @@ export class HumanAvatar {
       }
       pp.needsUpdate = true;
       g.computeVertexNormals();
+      if (p.seams) {
+        const nn = g.getAttribute('normal') as BufferAttribute, q = p.seams;
+        for (let i = 0; i < q.length; i += 2) { tmpA.fromBufferAttribute(nn, q[i]); tmpB.fromBufferAttribute(nn, q[i + 1]).add(tmpA); nn.setXYZ(q[i + 1], tmpB.x, tmpB.y, tmpB.z); }
+        for (let i = q.length - 2; i >= 0; i -= 2) { tmpA.fromBufferAttribute(nn, q[i + 1]).normalize(); nn.setXYZ(q[i + 1], tmpA.x, tmpA.y, tmpA.z); nn.setXYZ(q[i], tmpA.x, tmpA.y, tmpA.z); }
+      }
       g.computeBoundingSphere();
     }
 

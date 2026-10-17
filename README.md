@@ -26,7 +26,17 @@ cd mpfb2 && git sparse-checkout set src/mpfb/data && cd ..
 curl -LO https://files2.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
 unzip makehuman_system_assets_cc0.zip -d mh_assets
 npm run build:human -- mpfb2/src/mpfb/data mh_assets      # -> assets/human (~14 MB, all options)
+npm run build:garments                                     # + modest wear and dresses (below)
 ```
+
+`build:garments` (`tools/build-garments.mts`) adds garments the MakeHuman packs don't have, generated
+in code from the human package itself (no third-party assets): **hijab**, **al-amira**, **abaya**,
+**jalabiya**, a **day dress**, a **maxi dress** and an **evening gown**. They are regular proxies, so
+they follow every body and face slider; they are tintable (`garmentColors`, palette in
+`GARMENT_COLORS`), and headwear hides the hair while worn. Run it again after `build:human`.
+`demo/garments.html` renders a contact sheet (`?variants=1` adds extreme body shapes).
+
+![Generated garments](demo/garments-preview.png)
 
 Host `assets/human/` on any static host or CDN (S3, Cloudflare R2, GitHub Pages…). No server
 compression is needed: binaries are pre-gzipped and decoded in JS by `fflate`.
@@ -79,7 +89,7 @@ const glb = await exportHumanGLB(avatar);   // Mixamo-rigged, ARKit blendshapes
 ### Avatar editor: one config, web and React Native
 
 `<HumanEditor>` is a drop-in customization screen with live 3D preview, section tabs (face,
-skin, eyes, brows, nose, mouth, ears, hair, body, outfit, shoes, hat), randomize and save. The
+skin, eyes, brows, nose, mouth, ears, hair, headwear, body, outfit, shoes, hat), randomize and save. The
 same `options` object decides what your users may change on both platforms:
 
 ```tsx
@@ -112,9 +122,9 @@ const { pkg } = useHumanPackage(ASSETS);
 | `gender` | `'female'` or `'male'` locks the gender, hides the gender slider, and filters hair, clothes and skins to ones that suit it. `'any'` shows everything. |
 | `sections` | Which tabs to show, in order. |
 | `exclude` / `include` | Hide (or whitelist) whole sections or single controls: `'ears'`, `'hair.color'`, `'nose.noseWidth'`, `'body.weight'`… |
-| `items` | Allowed ids per slot: `hair`, `outfit`, `shoes`, `hat`, `skin`, `eyes`, `eyebrows`, `eyelashes`. |
-| `colors` | Palettes for `hair`, `eyebrows` and `skinTint`. |
-| `optional` | Slots that offer "None" (`hair`, `hat`, `eyebrows`, `shoes`). |
+| `items` | Allowed ids per slot: `hair`, `headwear`, `outfit`, `shoes`, `hat`, `skin`, `eyes`, `eyebrows`, `eyelashes`. |
+| `colors` | Palettes for `hair`, `eyebrows`, `skinTint` and `garments` (outfit/headwear fabric). |
+| `optional` | Slots that offer "None" (`hair`, `hat`, `headwear`, `eyebrows`, `shoes`). |
 | `detailRange` | Caps the face/body detail sliders (0..1). |
 | `defaults` / `locked` | Starting values / values that are always enforced. |
 | `labels` | Rename any section, control or item (for translation). |
@@ -210,7 +220,8 @@ avatar picks up the same bias, such as a wider mouth.
 - **Detail:** `detail: { [id]: -1..1 }`, with the ids listed in `DETAIL_SLIDERS` (head shape, jaw,
   chin, cheeks, eyes, brows, nose ×9, mouth ×8, ears, neck, shoulders, chest, waist, hips…).
 - **Style:** `skin`, `skinTint`, `eyes`, `eyebrows`, `eyebrowColor`, `eyelashes`, `hair`,
-  `hairColor`, and `clothes: string[]`. The available ids are listed in `pkg.manifest`.
+  `hairColor`, `clothes: string[]` and `garmentColors: { outfit?, headwear? }` (fabric colors of
+  tintable garments). The available ids are listed in `pkg.manifest`.
 
 ### How it works
 
@@ -266,8 +277,9 @@ npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
 - **Wardrobe:** hairstyles and clothes are limited to the CC0 MakeHuman system packs (10 hairstyles,
   12 outfits, 6 shoes). They are dated next to commercial avatar SDKs: hair is rendered with soft
   two-pass cards, but the meshes themselves are 2014-era. More CC0
-  packs, or your own `.mhclo` assets, can be added through `tools/build-human.ts`. There's no hijab
-  or kufi in the realistic set yet.
+  packs, or your own `.mhclo` assets, can be added through `tools/build-human.ts`. Modest wear and
+  dresses come from `tools/build-garments.mts`: they're smooth, procedurally draped shapes (no
+  simulated folds), shaped for the rest pose; there's no kufi or niqab yet.
 - **Hair quality:** hair uses alpha-tested cards, so the edges are crisper with MSAA (`antialias: true`).
 
 ## Licenses
@@ -276,6 +288,7 @@ npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
 - Human assets (base mesh, targets, skins, hair, clothes, rig, weights, expression units): CC0 1.0,
   from the [MakeHuman](http://www.makehumancommunity.org) project and
   [MPFB2](https://github.com/makehumancommunity/mpfb2). Credit is appreciated but not required.
+- Generated garments and fabric textures (`tools/build-garments.mts` output): original, CC0 1.0.
 - Selfie fitting: MediaPipe Face Landmarker and its canonical face mesh are Apache-2.0 (Google).
   `src/human/faceMap.ts` contains vertex indices and averaged landmark positions derived from them.
   The model and WASM are downloaded at runtime and aren't bundled.

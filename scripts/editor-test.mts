@@ -54,5 +54,30 @@ const outfit = f.sections.find((s) => s.id === 'outfit')!.controls[0];
 const dressed = outfit.kind === 'choice' ? outfit.apply(f.initial, 'female_elegantsuit01') : f.initial;
 check(dressed.clothes.filter((c) => clothingInfo(c).slot === 'outfit').join() === 'female_elegantsuit01' && dressed.clothes.some((c) => c.startsWith('shoes')), 'outfit swap keeps shoes');
 
+// generated modest wear + dresses (tools/build-garments.mts)
+const sec = (e: typeof f, id: string) => e.sections.find((s) => s.id === id);
+check(['hijab01', 'amira01'].every((h) => f.allowed.headwear.includes(h)), `female: headwear ${f.allowed.headwear}`);
+check(['abaya01', 'jalabiya01', 'dress_knee01', 'dress_maxi01', 'gown01'].every((o) => f.allowed.outfit.includes(o)), 'female: abaya, jalabiya and dresses offered');
+check(!m.allowed.headwear.length && !m.sections.some((s) => s.id === 'headwear') && !m.allowed.outfit.includes('abaya01'), 'male: no headwear section or dresses');
+const hw = sec(f, 'headwear')!;
+check(!!hw && hw.framing === 'face' && hw.controls.map((c) => c.id).join() === 'style,color', 'headwear section: style + color');
+const style = hw.controls[0], hwColor = hw.controls[1];
+check(f.initial.clothes.every((c) => clothingInfo(c).slot !== 'headwear'), 'no headwear by default');
+let look = style.kind === 'choice' ? style.apply(f.initial, 'hijab01') : f.initial;
+check(look.clothes.includes('hijab01') && look.clothes.some((c) => clothingInfo(c).slot === 'outfit'), 'hijab adds to the outfit');
+look = hwColor.kind === 'color' ? hwColor.apply(look, '#1f6f6b') : look;
+check(look.garmentColors?.headwear === '#1f6f6b' && hwColor.value(look) === '#1f6f6b', 'headwear color');
+const outfitSec = sec(f, 'outfit')!;
+const oc = outfitSec.controls.find((c) => c.id === 'color');
+check(!!oc && oc.kind === 'color' && oc.value(f.normalize({ clothes: ['abaya01'] })) === manifest.proxies.find((p) => p.id === 'abaya01')!.color, 'outfit color defaults to the garment color');
+const hatted = createHumanEditor(manifest, { gender: 'female' });
+const hatCtl = sec(hatted, 'hat')!.controls[0];
+const withHat = hatCtl.kind === 'choice' ? hatCtl.apply(look, 'fedora01') : look;
+check(withHat.clothes.includes('fedora01') && !withHat.clothes.includes('hijab01'), 'hat replaces headwear');
+check(f.normalize({ ...look, clothes: [...look.clothes, 'fedora01'] }).clothes.filter((c) => ['fedora01', 'hijab01'].includes(c)).join() === 'hijab01', 'normalize: headwear wins over a hat');
+const meta = (id: string) => manifest.proxies.find((p) => p.kind === 'clothes' && p.id === id)!;
+check(meta('hijab01').hidesHair === true && (meta('hijab01').deleteVerts?.length ?? 0) > 0, 'hijab hides hair and scalp');
+check(['abaya01', 'gown01', 'dress_knee01'].every((id) => meta(id).tintable && (meta(id).deleteVerts?.length ?? 0) > 0), 'dresses tintable and hide the body underneath');
+
 console.log(fails ? `${fails} failures` : 'all editor checks passed');
 process.exit(fails ? 1 : 0);
