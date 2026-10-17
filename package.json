@@ -1,0 +1,86 @@
+{
+  "name": "open-avatar",
+  "version": "0.1.0",
+  "description": "Open-source avatar SDK for React and React Native: realistic MakeHuman-based humans (CC0) plus a tiny procedural low-poly mode.",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "react-native": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./human": "./src/human/index.ts",
+    "./human/export": "./src/human/export.ts",
+    "./human/selfie": "./src/human/selfie.ts"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "demo": "vite",
+    "build:human": "tsx tools/build-human.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/smoke.ts && tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts",
+    "build:facemap": "tsx tools/build-facemap.mts"
+  },
+  "peerDependencies": {
+    "@gltf-transform/core": ">=4",
+    "@gltf-transform/extensions": ">=4",
+    "@gltf-transform/functions": ">=4",
+    "expo-file-system": ">=18",
+    "expo-gl": ">=13",
+    "react": ">=18",
+    "react-native": ">=0.72",
+    "three": ">=0.160",
+    "@mediapipe/tasks-vision": ">=0.10"
+  },
+  "peerDependenciesMeta": {
+    "expo-gl": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "expo-file-system": {
+      "optional": true
+    },
+    "@gltf-transform/core": {
+      "optional": true
+    },
+    "@gltf-transform/extensions": {
+      "optional": true
+    },
+    "@gltf-transform/functions": {
+      "optional": true
+    },
+    "@mediapipe/tasks-vision": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "@mediapipe/tasks-vision": "^1.1.1",
+    "@types/react": "^18.3.12",
+    "@types/three": "^0.186.0",
+    "expo-file-system": "^19.0.24",
+    "expo-gl": "^16.0.10",
+    "expo-modules-core": "^3.0.30",
+    "gl-matrix": "^3.4.4",
+    "meshoptimizer": "^1.3.0",
+    "react": "^18.3.1",
+    "react-native": "^0.81.6",
+    "sharp": "^0.35.5",
+    "three": "^0.186.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.6.3",
+    "vite": "^8.3.4"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3"
+  }
+}

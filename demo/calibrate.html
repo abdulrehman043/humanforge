@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Selfie fit calibration</title>
+  <style>body { font: 13px/1.4 system-ui, sans-serif; margin: 16px; } pre { white-space: pre-wrap; word-break: break-all; max-height: 50vh; overflow: auto; background: #f4f5f7; padding: 8px; }</style>
+</head>
+<body>
+  <h3>Selfie fit calibration</h3>
+  <p>Runs MediaPipe Face Landmarker on the public-domain portraits in tools/calibration-portraits.json and
+    averages their landmarks (pose/scale removed). Save the JSON below and pass it to
+    <code>npm run build:facemap -- canonical_face_model.obj --calibration mean.json</code>.</p>
+  <div id="status">Starting…</div>
+  <pre id="out"></pre>
+  <script type="module" src="./calibrate.ts"></script>
+</body>
+</html>
