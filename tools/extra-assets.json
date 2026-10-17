@@ -1,0 +1,170 @@
+{
+  "packs": {
+    "hair01": {
+      "url": "https://files2.makehumancommunity.org/asset_packs/hair01/hair01_cc0.zip",
+      "license": "CC0-1.0"
+    },
+    "dress01": {
+      "url": "https://files2.makehumancommunity.org/asset_packs/dress01/dress01_cc0.zip",
+      "license": "CC0-1.0"
+    },
+    "suits01": {
+      "url": "https://files2.makehumancommunity.org/asset_packs/suits01/suits01_cc0.zip",
+      "license": "CC0-1.0"
+    }
+  },
+  "hair": {
+    "toigo_blunt_bob": {
+      "pack": "hair01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1669"
+    },
+    "toigo_blunt_bob_with_bangs": {
+      "pack": "hair01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1681"
+    },
+    "toigo_curled_under_bob": {
+      "pack": "hair01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1677"
+    },
+    "toigo_inverted_bob_with_bangs": {
+      "pack": "hair01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1685"
+    },
+    "cortu_straight_bangs": {
+      "pack": "hair01",
+      "author": "Cortu",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/2810"
+    },
+    "rehmanpolanski_hair_bun_brown": {
+      "pack": "hair01",
+      "author": "RehmanPolanski",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/2477"
+    },
+    "culturalibre_hair_01": {
+      "pack": "hair01",
+      "author": "culturalibre",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/2893"
+    },
+    "sonntag78_junglebook_hair": {
+      "pack": "hair01",
+      "author": "sonntag78",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/174"
+    },
+    "culturalibre_hair_02": {
+      "pack": "hair01",
+      "author": "culturalibre",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/2892"
+    }
+  },
+  "clothes": {
+    "toigo_camisole_dress_with_full_skirt": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1730"
+    },
+    "toigo_halter_dress_knee_length": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1853"
+    },
+    "toigo_halter_dress_midi": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1854"
+    },
+    "toigo_halter_dress_with_fluted_skirt": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1855"
+    },
+    "toigo_shift_dress": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1724"
+    },
+    "toigo_keyhole_neck_dress": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1613"
+    },
+    "toigo_dress_with_tiered_skirt": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1640"
+    },
+    "toigo_bodice_dress_with_lace_ruffle_skirt": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1706"
+    },
+    "toigo_strapless_ruffle_top_dress": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1705"
+    },
+    "toigo_cut_out_dress": {
+      "pack": "dress01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1704"
+    },
+    "toigo_female_suit": {
+      "pack": "suits01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1324"
+    },
+    "toigo_female_double-breasted_suit": {
+      "pack": "suits01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1742"
+    },
+    "toigo_female_suit_2": {
+      "pack": "suits01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1739"
+    },
+    "toigo_male_suit_3": {
+      "pack": "suits01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1733"
+    },
+    "toigo_male_double-breasted_suit": {
+      "pack": "suits01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1740"
+    },
+    "toigo_suit_with_dinner_jacket": {
+      "pack": "suits01",
+      "author": "MargaretToigo",
+      "license": "CC0-1.0",
+      "source": "http://www.makehumancommunity.org/node/1746"
+    }
+  }
+}

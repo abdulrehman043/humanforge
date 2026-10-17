@@ -1,6 +1,11 @@
 // Builds the realistic-human asset package from MakeHuman/MPFB CC0 data.
 //
 //   npx tsx tools/build-human.ts <mpfb2/src/mpfb/data> <makehuman_system_assets dir> [outDir]
+//       [--extra <unzipped community pack>]...
+//
+// --extra adds hair/ and clothes/ items from MakeHuman community asset packs (unzipped CC0
+// packs from files2.makehumancommunity.org/asset_packs). Only the ids listed in
+// tools/extra-assets.json are baked; that file also records each item's author, license and source.
 //
 // Output (default assets/human/):
 //   manifest.json   morph table, sliders, bones, proxies, skins
@@ -20,8 +25,13 @@ import { quantize } from '@gltf-transform/functions';
 import { quat, mat4, vec3 } from 'gl-matrix';
 import { DETAIL_SLIDERS, EXPRESSION_UNITS } from '../src/human/sliders';
 
-const [DATA, ASSETS, OUT = path.resolve('assets/human')] = process.argv.slice(2);
-if (!DATA || !ASSETS) throw new Error('usage: build-human.ts <mpfb data dir> <system assets dir> [outDir]');
+const argv = process.argv.slice(2), EXTRA: string[] = [];
+for (let i = argv.indexOf('--extra'); i >= 0; i = argv.indexOf('--extra')) EXTRA.push(...argv.splice(i, 2).slice(1));
+const [DATA, ASSETS, OUT = path.resolve('assets/human')] = argv;
+if (!DATA || !ASSETS) throw new Error('usage: build-human.ts <mpfb data dir> <system assets dir> [outDir] [--extra <pack dir>]...');
+interface ExtraItem { pack: string; author: string; license: string; source: string }
+const EXTRA_LIST: Record<'hair' | 'clothes', Record<string, ExtraItem>> =
+  JSON.parse(readFileSync(path.resolve('tools/extra-assets.json'), 'utf8'));
 const UNIT = 0.1; // MakeHuman decimetres -> metres
 
 // ---------------------------------------------------------------- OBJ / targets
@@ -253,16 +263,24 @@ function top4(list: [number, number][]): [number[], number[]] {
 }
 
 // ---------------------------------------------------------------- textures
-async function webp(file: string, size: number, opts: { gray?: boolean; alpha?: boolean; q?: number } = {}) {
+async function webp(file: string, size: number, opts: { gray?: boolean; alpha?: boolean; q?: number; maxContrast?: number } = {}) {
   let img = sharp(file).resize(size, size, { fit: 'fill' });
   if (opts.gray) {
     // Tintable: luminance normalised so the mean opaque texel is ~0.8, colour comes from material.color.
     const { data, info } = await sharp(file).resize(size, size, { fit: 'fill' }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     let sum = 0, n = 0;
     for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 128) { sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]; n++; }
-    const k = (0.8 * 255) / ((sum / Math.max(1, n)) || 1);
+    const mean = sum / Math.max(1, n) || 1, k = (0.8 * 255) / mean;
+    // Optional cap on contrast (std dev / mean): dark community textures otherwise clip into harsh streaks.
+    let c = 1;
+    if (opts.maxContrast) {
+      let v = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 128) v += (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] - mean) ** 2;
+      c = Math.min(1, opts.maxContrast / (Math.sqrt(v / Math.max(1, n)) / mean));
+    }
     for (let i = 0; i < data.length; i += 4) {
-      const l = Math.min(255, (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) * k);
+      const l0 = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const l = Math.max(0, Math.min(255, (c < 1 ? mean + (l0 - mean) * c : l0) * k));
       data[i] = data[i + 1] = data[i + 2] = l;
     }
     img = sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } });
@@ -400,7 +418,7 @@ function fitProxy(refs: number[][], scale: [number, number, number][], P: Float3
   return out;
 }
 
-async function buildProxy(kind: string, dir: string, opts: { tint?: boolean; texSize?: number; mat?: string } = {}): Promise<ProxyMeta | null> {
+async function buildProxy(kind: string, dir: string, opts: { tint?: boolean; texSize?: number; mat?: string; maxContrast?: number } = {}): Promise<ProxyMeta | null> {
   const id = path.basename(dir);
   const mhclo = readdirSync(dir).find((f) => f.endsWith('.mhclo'));
   if (!mhclo) return null;
@@ -435,10 +453,11 @@ async function buildProxy(kind: string, dir: string, opts: { tint?: boolean; tex
   const texSize = opts.texSize ?? 1024;
   if (diffuse && existsSync(diffuse)) {
     texture = `textures/${kind}-${id}.webp`;
-    writeFileSync(path.join(OUT, texture), await webp(diffuse, texSize, { gray: opts.tint }));
+    writeFileSync(path.join(OUT, texture), await webp(diffuse, texSize, { gray: opts.tint, maxContrast: opts.maxContrast }));
   }
+  // Hair normal maps only when tangent-space (some community hair ships object-space ones).
   const normalMap = mhmat.normalmapTexture && path.join(dir, mhmat.normalmapTexture);
-  if (normalMap && existsSync(normalMap) && kind === 'clothes') {
+  if (normalMap && existsSync(normalMap) && (kind === 'clothes' || kind === 'hair' && !/objnorm/i.test(normalMap))) {
     normalTexture = `textures/${kind}-${id}_n.webp`;
     writeFileSync(path.join(OUT, normalTexture), await webp(normalMap, 1024, { q: 75 }));
   }
@@ -475,6 +494,20 @@ async function buildProxy(kind: string, dir: string, opts: { tint?: boolean; tex
   await add('tongue', 'tongue01', { texSize: 256 });
   for (const s of readdirSync(path.join(ASSETS, 'hair'))) await add('hair', s, { tint: true, texSize: 1024 });
   for (const s of readdirSync(path.join(ASSETS, 'clothes'))) await add('clothes', s, { texSize: 1024 });
+  // community packs: only the listed ids, never shadowing a system asset
+  const found = new Set<string>();
+  for (const pack of EXTRA) for (const kind of ['hair', 'clothes'] as const) {
+    const root = path.join(pack, kind);
+    if (!existsSync(root)) continue;
+    for (const s of readdirSync(root).sort()) {
+      if (!EXTRA_LIST[kind][s] || found.has(s)) continue;
+      if (proxies.some((p) => p.kind === kind && p.id === s)) throw new Error(`extra ${kind}/${s} clashes with a system asset`);
+      const p = await buildProxy(kind, path.join(root, s), kind === 'hair' ? { tint: true, texSize: 1024, maxContrast: 0.3 } : { texSize: 1024 });
+      if (p) { proxies.push(p); found.add(s); console.log(`  ${p.file} (${p.triangles} tris, ${EXTRA_LIST[kind][s].pack})`); }
+    }
+  }
+  if (EXTRA.length) for (const kind of ['hair', 'clothes'] as const) for (const id of Object.keys(EXTRA_LIST[kind]))
+    if (!found.has(id)) console.warn(`  extra ${kind}/${id} listed in extra-assets.json but not found`);
 
   // skins
   const skins: { id: string; tags: string[] }[] = [];

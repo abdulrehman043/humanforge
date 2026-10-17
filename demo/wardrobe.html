@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wardrobe Sheet</title>
+  <style>body { margin: 0; background: #e9ecf1; font: 12px system-ui, sans-serif; } canvas { display: block; max-width: 100%; }</style>
+</head>
+<body>
+  <canvas id="sheet"></canvas>
+  <script type="module">
+    // Contact sheet of realistic-human wardrobe items, for comparing hairstyles and outfits:
+    //   /wardrobe.html?kind=hair&ids=long01,bob02&color=%236b4428&cols=6
+    //   /wardrobe.html?kind=outfit&gender=female      (all outfits that fit; scale=2 for bigger cells)
+    // Each cell shows a front and a three-quarter view. window.sheetDone is set when finished.
+    import {
+      ACESFilmicToneMapping, Color, DirectionalLight, HemisphereLight, PMREMGenerator, PerspectiveCamera, Scene, SRGBColorSpace,
+      Vector3, WebGLRenderer,
+    } from 'three';
+    import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+    import { HumanAvatar, loadHumanPackage } from '../src/human/runtime';
+    import { clothingInfo, fits, hairInfo } from '../src/human/catalog';
+
+    const qp = new URLSearchParams(location.search);
+    const kind = qp.get('kind') || 'hair';
+    const gender = qp.get('gender') || 'female';
+    const pkg = await loadHumanPackage('/human');
+    const all = kind === 'hair'
+      ? pkg.manifest.proxies.filter((p) => p.kind === 'hair').map((p) => p.id).filter((id) => fits(hairInfo(id).fit, gender))
+      : pkg.manifest.proxies.filter((p) => p.kind === 'clothes' && clothingInfo(p.id).slot === 'outfit' && fits(clothingInfo(p.id).fit, gender)).map((p) => p.id);
+    const ids = qp.get('ids') ? qp.get('ids').split(',') : all;
+    const face = kind === 'hair';
+    const cols = Number(qp.get('cols') || 5);
+    const k = Number(qp.get('scale') || 1), cw = (face ? 360 : 300) * k, ch = (face ? 230 : 420) * k, label = 22, views = face ? [0, 0.75] : [0, 0.6];
+
+    const renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.outputColorSpace = SRGBColorSpace;
+    renderer.toneMapping = ACESFilmicToneMapping;
+    const vw = cw / views.length;
+    renderer.setSize(vw, ch, false);
+    const scene = new Scene();
+    scene.background = new Color('#e9ecf1');
+    scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.55;
+    const key = new DirectionalLight('#fff4e8', 1.6); key.position.set(1.2, 2.2, 2.5);
+    const rim = new DirectionalLight('#dfe8ff', 0.9); rim.position.set(-2, 2, -2);
+    scene.add(key, rim, new HemisphereLight('#ffffff', '#b9a99a', 0.4));
+    const camera = new PerspectiveCamera(24, vw / ch, 0.05, 50);
+    const avatar = new HumanAvatar(pkg);
+    scene.add(avatar.group);
+
+    const sheet = document.getElementById('sheet');
+    sheet.width = cols * cw; sheet.height = Math.ceil(ids.length / cols) * (ch + label);
+    const g = sheet.getContext('2d');
+    g.fillStyle = '#e9ecf1'; g.fillRect(0, 0, sheet.width, sheet.height);
+    const female = gender !== 'male';
+    const baseCfg = female
+      ? { gender: 0, skin: 'young_caucasian_female', eyebrows: 'eyebrow002', clothes: ['female_casualsuit01', 'shoes01'] }
+      : { gender: 1, skin: 'young_caucasian_male', eyebrows: 'eyebrow001', clothes: ['male_casualsuit01', 'shoes01'] };
+    for (const [i, id] of ids.entries()) {
+      const cfg = kind === 'hair'
+        ? { ...baseCfg, hair: id, hairColor: qp.get('color') || '#6b4428' }
+        : { ...baseCfg, hair: female ? 'long01' : 'short02', clothes: [id, 'shoes01'] };
+      await avatar.setConfig(cfg);
+      const m = avatar.metrics();
+      const target = face ? new Vector3(0, m.headY - 0.04, 0) : new Vector3(0, m.height * 0.52, 0);
+      const h = face ? 0.5 : m.height * 1.08;
+      const dist = h / 2 / Math.tan((camera.fov * Math.PI) / 360) / Math.min(1, camera.aspect * (face ? 1.1 : 1.6));
+      const x = (i % cols) * cw, y = Math.floor(i / cols) * (ch + label);
+      views.forEach((yaw, v) => {
+        camera.position.set(Math.sin(yaw) * dist, target.y + dist * 0.03, Math.cos(yaw) * dist);
+        camera.lookAt(target);
+        renderer.render(scene, camera);
+        g.drawImage(renderer.domElement, x + v * vw, y);
+      });
+      g.fillStyle = '#222'; g.font = '13px system-ui, sans-serif';
+      const name = kind === 'hair' ? hairInfo(id).label : clothingInfo(id).label;
+      g.fillText(qp.has('ids') ? `${name} (${id})` : name, x + 6, y + ch + 15, cw - 12);
+    }
+    window.sheetDone = true;
+  </script>
+</body>
+</html>

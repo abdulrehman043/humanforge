@@ -249,7 +249,9 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
   return { options, sections, initial: normalize(), normalize, randomize, allowed };
 }
 
-const HAIR_ORDER = ['long01', 'ponytail01', 'bob02', 'afro01', 'short02', 'short01', 'short04', 'bob01', 'braid01', 'short03'];
+const HAIR_ORDER = ['long01', 'culturalibre_hair_01', 'cortu_straight_bangs', 'sonntag78_junglebook_hair', 'ponytail01', 'rehmanpolanski_hair_bun_brown',
+  'toigo_blunt_bob', 'toigo_blunt_bob_with_bangs', 'toigo_curled_under_bob', 'toigo_inverted_bob_with_bangs', 'bob02', 'afro01',
+  'short02', 'culturalibre_hair_02', 'short01', 'short04', 'bob01', 'braid01', 'short03'];
 const order = (id: string) => { const i = HAIR_ORDER.indexOf(id); return i < 0 ? 100 : i; };
 
 /** Same age/ethnicity skin among the allowed ones (used when gender filtering removes the current skin). */
