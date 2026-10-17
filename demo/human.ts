@@ -1,4 +1,4 @@
-// Web editor for the realistic human (open-avatar/human).
+// Web editor for the realistic human (humanforge/human).
 import {
   ACESFilmicToneMapping, Color, DirectionalLight, HemisphereLight, PMREMGenerator, PerspectiveCamera, Scene,
   SRGBColorSpace, Vector3, WebGLRenderer,

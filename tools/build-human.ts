@@ -497,7 +497,7 @@ async function buildProxy(kind: string, dir: string, opts: { tint?: boolean; tex
   }
 
   const manifest = {
-    format: 'open-avatar-human', version: 1, license: 'CC0-1.0 (MakeHuman / MPFB assets)', units: 'm',
+    format: 'humanforge-human', version: 1, license: 'CC0-1.0 (MakeHuman / MPFB assets)', units: 'm',
     vertexCount: N, bodyVertexRange: vgroups.body[0], groundVerts: groundIdx,
     body: { file: 'body.glb.gz', ...body },
     shapes: { file: 'shapes.bin.gz', baseOffset, baseMin: bmin, baseScale, morphs: morphTable },

@@ -1,9 +1,9 @@
 // Minimal Expo usage: `npx create-expo-app`, `npx expo install expo-gl expo-file-system three`,
-// copy/link open-avatar, then use this as App.tsx.
+// copy/link humanforge, then use this as App.tsx.
 import React, { useState } from 'react';
 import { Pressable, SafeAreaView, Text } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { AvatarCreator, AvatarView, decodeAvatar } from 'open-avatar';
+import { AvatarCreator, AvatarView, decodeAvatar } from 'humanforge';
 
 export default function App() {
   const [code, setCode] = useState<string | null>(null); // persist this string in your backend

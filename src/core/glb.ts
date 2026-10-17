@@ -55,7 +55,7 @@ export function avatarToGLB(config: Partial<AvatarConfig>, opts?: BuildOptions):
   });
 
   const json = {
-    asset: { version: '2.0', generator: 'open-avatar' },
+    asset: { version: '2.0', generator: 'humanforge' },
     scene: 0,
     scenes: [{ nodes: [0] }],
     nodes, meshes, materials, accessors, bufferViews,

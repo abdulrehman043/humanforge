@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Texture } from 'three';
 import type { HumanTextureLoader, LoadOptions } from '../human/runtime';
 
-const DIR = `${FileSystem.cacheDirectory ?? ''}open-avatar/`;
+const DIR = `${FileSystem.cacheDirectory ?? ''}humanforge/`;
 let dirReady: Promise<void> | null = null;
 
 /** Download once into the cache directory; later sessions load offline. */
@@ -17,7 +17,7 @@ async function cached(url: string): Promise<string> {
     const res = await FileSystem.downloadAsync(url, file);
     if (res.status !== 200) {
       await FileSystem.deleteAsync(file, { idempotent: true });
-      throw new Error(`open-avatar: ${res.status} for ${url}`);
+      throw new Error(`humanforge: ${res.status} for ${url}`);
     }
   }
   return file;

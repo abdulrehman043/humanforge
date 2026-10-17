@@ -1,9 +1,9 @@
-# open-avatar
+# HumanForge
 
 An open-source 3D avatar SDK for React and React Native, built as an open alternative to hosted
 avatar builders such as MetaPerson Creator. It has two modes:
 
-| | **Realistic human** (`open-avatar/human`) | **Stylized low-poly** (`open-avatar/core`) |
+| | **Realistic human** (`humanforge/human`) | **Stylized low-poly** (`humanforge/core`) |
 | --- | --- | --- |
 | Look | Photoreal skin, eyes, hair cards, clothes | Flat-colored, procedural |
 | Base | MakeHuman / MPFB2 human (CC0), 26.7k-triangle body | three.js primitives, 7–11k triangles |
@@ -38,7 +38,7 @@ npx expo install expo-gl expo-file-system three fflate
 ```
 
 ```tsx
-import { HumanView, useHumanPackage } from 'open-avatar';
+import { HumanView, useHumanPackage } from 'humanforge';
 
 const { pkg } = useHumanPackage('https://cdn.example.com/human');
 if (!pkg) return <Loading />;
@@ -62,8 +62,8 @@ Files are cached in the app's cache directory, so later launches work offline. A
 ### 3. React / web
 
 ```ts
-import { HumanAvatar, loadHumanPackage } from 'open-avatar/human';
-import { exportHumanGLB } from 'open-avatar/human/export';   // optional, web only
+import { HumanAvatar, loadHumanPackage } from 'humanforge/human';
+import { exportHumanGLB } from 'humanforge/human/export';   // optional, web only
 
 const pkg = await loadHumanPackage('/human');
 const avatar = new HumanAvatar(pkg);
@@ -84,7 +84,7 @@ has two parts:
 
 1. **Landmarks:** [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
    (Apache-2.0) gives 478 3D landmarks, including the irises.
-2. **Fit** (`open-avatar/human`, plain TypeScript, no WASM): each landmark is tied to a MakeHuman
+2. **Fit** (`humanforge/human`, plain TypeScript, no WASM): each landmark is tied to a MakeHuman
    vertex. The fit removes pose and scale (similarity Procrustes), then solves a box-constrained
    ridge least-squares problem over the detail morphs. Macros are linearized with finite
    differences. Expression morphs are fitted too and then thrown away, so a smile doesn't turn
@@ -100,7 +100,7 @@ npm i @mediapipe/tasks-vision
 ```
 
 ```ts
-import { createSelfieFitter } from 'open-avatar/human/selfie';
+import { createSelfieFitter } from 'humanforge/human/selfie';
 
 const fitter = await createSelfieFitter();             // loads the WASM + model from public CDNs
 const { config, error } = await fitter.fit(pkg, file, { hints: { gender: 1 } });
@@ -184,13 +184,13 @@ This mode has zero asset files: every part is generated from three.js primitives
 serializes to a ~60-character code.
 
 ```tsx
-import { AvatarCreator, AvatarView, decodeAvatar } from 'open-avatar';
+import { AvatarCreator, AvatarView, decodeAvatar } from 'humanforge';
 
 <AvatarCreator onSave={(config, code, view) => api.saveAvatar(code)} />
 <AvatarView config={decodeAvatar(code)} framing="bust" style={{ width: 96, height: 96 }} />
 ```
 
-The core works without React (`buildAvatar`, `avatarToGLB` from `open-avatar/core`). The editor
+The core works without React (`buildAvatar`, `avatarToGLB` from `humanforge/core`). The editor
 UI is generated from `EDITOR_SCHEMA`. When adding config fields, only append new ones so stored
 codes stay valid.
 

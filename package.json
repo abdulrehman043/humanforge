@@ -1,8 +1,32 @@
 {
-  "name": "open-avatar",
+  "name": "humanforge",
   "version": "0.1.0",
   "description": "Open-source avatar SDK for React and React Native: realistic MakeHuman-based humans (CC0) plus a tiny procedural low-poly mode.",
   "license": "MIT",
+  "author": "abdulrehman043",
+  "homepage": "https://github.com/abdulrehman043/humanforge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdulrehman043/humanforge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/abdulrehman043/humanforge/issues"
+  },
+  "keywords": [
+    "avatar",
+    "3d",
+    "react",
+    "react-native",
+    "expo",
+    "threejs",
+    "makehuman",
+    "selfie-to-avatar",
+    "blendshapes",
+    "arkit",
+    "mixamo",
+    "glb",
+    "metaperson-alternative"
+  ],
   "main": "src/index.ts",
   "react-native": "src/index.ts",
   "types": "src/index.ts",
