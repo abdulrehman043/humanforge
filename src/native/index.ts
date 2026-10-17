@@ -5,3 +5,5 @@ export type { AvatarCreatorProps } from './AvatarCreator';
 export { HumanView, useHumanPackage } from './HumanView';
 export type { HumanViewHandle, HumanViewProps } from './HumanView';
 export { expoFetch, expoLoadOptions, expoTextureLoader } from './humanExpo';
+export { HumanEditor } from './HumanEditor';
+export type { HumanEditorProps } from './HumanEditor';

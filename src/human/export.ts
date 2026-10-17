@@ -23,7 +23,10 @@ export async function exportHumanGLB(avatar: HumanAvatar): Promise<Uint8Array> {
     const alpha = mat.transparent || mat.alphaTest > 0;
     for (const t of [mat.map, mat.normalMap]) if (t) t.userData.mimeType = alpha ? 'image/png' : 'image/jpeg';
   });
-  const raw = (await new GLTFExporter().parseAsync(avatar.group, { binary: true, onlyVisible: true })) as ArrayBuffer;
+  // the hair's soft-tip pass is a render-time duplicate; export the mesh once
+  const tips: SkinnedMesh[] = [];
+  avatar.group.traverse((o) => { if (o.userData.softPass && o.visible) { tips.push(o as SkinnedMesh); o.visible = false; } });
+  const raw = (await new GLTFExporter().parseAsync(avatar.group, { binary: true, onlyVisible: true }).finally(() => tips.forEach((t) => (t.visible = true)))) as ArrayBuffer;
   const io = new WebIO().registerExtensions([KHRMeshQuantization]);
   const doc = await io.readBinary(new Uint8Array(raw));
   // quantize first: it rewrites accessors, which would drop the sparse flag set by sparse()

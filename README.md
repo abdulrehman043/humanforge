@@ -76,6 +76,55 @@ const glb = await exportHumanGLB(avatar);   // Mixamo-rigged, ARKit blendshapes
 
 `demo/human.html` is a complete web editor (`npm run demo`, then open `/human.html`).
 
+### Avatar editor: one config, web and React Native
+
+`<HumanEditor>` is a drop-in customization screen with live 3D preview, section tabs (face,
+skin, eyes, brows, nose, mouth, ears, hair, body, outfit, shoes, hat), randomize and save. The
+same `options` object decides what your users may change on both platforms:
+
+```tsx
+// React web
+import { HumanEditor, useHumanPackage } from 'humanforge/web';
+// React Native (Expo)
+import { HumanEditor, useHumanPackage } from 'humanforge/native';
+
+const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.2.0/assets/human';
+const { pkg } = useHumanPackage(ASSETS);
+
+<HumanEditor
+  pkg={pkg}
+  defaultValue={savedAvatar}                 // the JSON you stored last time (optional)
+  options={{
+    gender: 'female',                        // 'female' | 'male' | 'any'
+    sections: ['face', 'eyes', 'nose', 'mouth', 'hair', 'outfit'],
+    exclude: ['ears', 'nose.noseHump', 'body.cupSize'],
+    items: { hair: ['long01', 'ponytail01', 'bob02'] },
+    colors: { hair: ['#1a1412', '#3d2618', '#6b4428', '#e6c88a'] },
+    detailRange: 0.7,                        // keep faces natural
+    locked: { eyes: 'brownlight' },          // never editable
+  }}
+  onSave={(config, snapshot) => api.saveAvatar(config)}
+/>
+```
+
+| Option | What it does |
+| --- | --- |
+| `gender` | `'female'` or `'male'` locks the gender, hides the gender slider, and filters hair, clothes and skins to ones that suit it. `'any'` shows everything. |
+| `sections` | Which tabs to show, in order. |
+| `exclude` / `include` | Hide (or whitelist) whole sections or single controls: `'ears'`, `'hair.color'`, `'nose.noseWidth'`, `'body.weight'`… |
+| `items` | Allowed ids per slot: `hair`, `outfit`, `shoes`, `hat`, `skin`, `eyes`, `eyebrows`, `eyelashes`. |
+| `colors` | Palettes for `hair`, `eyebrows` and `skinTint`. |
+| `optional` | Slots that offer "None" (`hair`, `hat`, `eyebrows`, `shoes`). |
+| `detailRange` | Caps the face/body detail sliders (0..1). |
+| `defaults` / `locked` | Starting values / values that are always enforced. |
+| `labels` | Rename any section, control or item (for translation). |
+
+The config is plain JSON; store it as-is. On load, `editor.normalize(saved)` (done for you by
+`<HumanEditor>`) repairs anything the current options don't allow. For example, a male outfit in
+a female-only app gets swapped for a women's one. To display the avatar elsewhere, use
+`<HumanCanvas>` (web) or `<HumanView>` (React Native) with the saved config. To build your own UI,
+`createHumanEditor(pkg.manifest, options)` returns the same sections and controls as data.
+
 ### 4. Selfie to avatar
 
 `fitSelfie` turns a front-facing photo into a `HumanConfig` patch. It sets the ethnicity mix, about
@@ -208,13 +257,15 @@ npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
 
 - **Verified:** the asset build, the decoder and smoke tests, and the web runtime (shape sliders,
   skins, hair, clothes, rig posing, expressions, GLB export), visually in Chrome.
-- **Not yet run on a device:** the React Native components (`HumanView`, `AvatarView`,
+- **Not yet run on a device:** the React Native components (`HumanView`, `HumanEditor`, `AvatarView`,
   `AvatarCreator`). They typecheck against RN 0.81, expo-gl 16 and expo-file-system 19, and use
   the standard expo-gl texture path (`{ localUri }`). Test on one iOS and one Android device before
   shipping.
 - **Selfie fit:** verified in Chrome with public-domain portraits (web path). The React Native
   landmark path is documented but not implemented. See "Selfie to avatar" for its limits.
-- **Wardrobe:** hairstyles and clothes are limited to the CC0 MakeHuman system packs. More CC0
+- **Wardrobe:** hairstyles and clothes are limited to the CC0 MakeHuman system packs (10 hairstyles,
+  12 outfits, 6 shoes). They are dated next to commercial avatar SDKs: hair is rendered with soft
+  two-pass cards, but the meshes themselves are 2014-era. More CC0
   packs, or your own `.mhclo` assets, can be added through `tools/build-human.ts`. There's no hijab
   or kufi in the realistic set yet.
 - **Hair quality:** hair uses alpha-tested cards, so the edges are crisper with MSAA (`antialias: true`).

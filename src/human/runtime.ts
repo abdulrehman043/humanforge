@@ -236,7 +236,19 @@ function geometryFrom(prim: GlbPrimitive, joints: string, weights: string) {
   return g;
 }
 
-interface ProxyInstance { meta: ProxyMeta; mesh: SkinnedMesh; refs: Uint16Array; refw: Float32Array; offs: Float32Array }
+/**
+ * Hair cards: the texture's transparent texels are near-white, which shows as a light halo
+ * around strands once alpha is blended. Darken texels by their coverage so tips fade naturally.
+ */
+function hairShading(m: MeshStandardMaterial) {
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>',
+      '#include <map_fragment>\n\tdiffuseColor.rgb *= mix(0.35, 1.0, smoothstep(0.05, 0.85, diffuseColor.a));');
+  };
+  m.customProgramCacheKey = () => 'humanforge-hair';
+}
+
+interface ProxyInstance { meta: ProxyMeta; mesh: SkinnedMesh; soft?: SkinnedMesh; refs: Uint16Array; refw: Float32Array; offs: Float32Array }
 
 export class HumanAvatar {
   readonly group = new Group();
@@ -325,13 +337,14 @@ export class HumanAvatar {
       this.removeProxy(entry[0]);
       this.proxies.set(entry[0], entry[1]);
       this.group.add(entry[1].mesh);
+      if (entry[1].soft) this.group.add(entry[1].soft);
     }
     this.skinMat.map = skinTex;
     this.skinMat.color.set(c.skinTint);
     this.skinMat.needsUpdate = true;
     for (const [slot, p] of this.proxies) {
       const m = p.mesh.material as MeshStandardMaterial;
-      if (slot === 'hair') m.color.set(c.hairColor);
+      if (slot === 'hair') { m.color.set(c.hairColor); (p.soft?.material as MeshStandardMaterial | undefined)?.color.set(c.hairColor); }
       if (slot === 'eyebrows') m.color.set(c.eyebrowColor);
       if (slot === 'eyes' && m.map !== eyeTex) { m.map = eyeTex; m.needsUpdate = true; }
     }
@@ -386,9 +399,25 @@ export class HumanAvatar {
       roughness: meta.kind === 'eyes' ? 0.15 : meta.kind === 'hair' ? 0.55 : 0.8,
       side: meta.doubleSided ? DoubleSide : FrontSide,
     });
+    let soft: SkinnedMesh | undefined;
     if (meta.kind === 'hair') {
-      mat.alphaTest = 0.3;
+      // Two passes: a solid core (alpha-tested, writes depth, so strands sort correctly) and a
+      // blended pass for the soft strand tips the cutout would otherwise chop off.
+      mat.alphaTest = 0.5;
       mat.alphaToCoverage = true;
+      mat.side = DoubleSide;
+      hairShading(mat);
+      const tips = mat.clone();
+      hairShading(tips);
+      tips.alphaTest = 0.04;
+      tips.alphaToCoverage = false;
+      tips.transparent = true;
+      tips.depthWrite = false;
+      soft = new SkinnedMesh(geo, tips);
+      soft.name = `${fullId}-tips`;
+      soft.userData.softPass = true;
+      soft.frustumCulled = false;
+      soft.renderOrder = 3;
     } else if (meta.transparent) {
       mat.transparent = true;
       mat.depthWrite = false;
@@ -403,7 +432,7 @@ export class HumanAvatar {
       mesh.morphTargetDictionary = this.body.morphTargetDictionary;
       mesh.morphTargetInfluences = [...(this.body.morphTargetInfluences ?? [])];
     }
-    return { meta, mesh, refs, refw, offs };
+    return { meta, mesh, soft, refs, refw, offs };
   }
 
   private removeProxy(slot: string) {
@@ -412,6 +441,7 @@ export class HumanAvatar {
     this.group.remove(p.mesh);
     p.mesh.geometry.dispose();
     (p.mesh.material as Material).dispose();
+    if (p.soft) { this.group.remove(p.soft); (p.soft.material as Material).dispose(); }
     this.proxies.delete(slot);
   }
 
@@ -488,7 +518,10 @@ export class HumanAvatar {
     });
     this.group.updateMatrixWorld(true);
     this.body.bind(this.skeleton); // recomputes bone inverses for the new rest pose
-    for (const p of this.proxies.values()) p.mesh.bind(this.skeleton, this.body.bindMatrix);
+    for (const p of this.proxies.values()) {
+      p.mesh.bind(this.skeleton, this.body.bindMatrix);
+      p.soft?.bind(this.skeleton, this.body.bindMatrix);
+    }
   }
 
   /** Head height and total height (world space at rest), for camera framing. */
