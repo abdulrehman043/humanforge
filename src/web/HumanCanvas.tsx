@@ -5,7 +5,7 @@ import {
   Vector3, WebGLRenderer,
 } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { HumanAvatar, HumanConfig, HumanPackage } from '../human/runtime';
+import { HumanAvatar, HumanConfig, HumanPackage, TextureTier } from '../human/runtime';
 
 export interface HumanCanvasProps {
   pkg: HumanPackage;
@@ -16,7 +16,8 @@ export interface HumanCanvasProps {
   background?: string;
   /** Drag to turn the avatar. Default true. */
   rotatable?: boolean;
-  textureSize?: '1k' | '2k';
+  /** Texture tier: '512' | '1k' | '2k' (default '2k'). */
+  textureSize?: TextureTier;
   className?: string;
   style?: React.CSSProperties;
   onReady?: (avatar: HumanAvatar) => void;

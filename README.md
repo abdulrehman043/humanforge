@@ -33,6 +33,7 @@ npm run build:human -- mpfb2/src/mpfb/data mh_assets \
   --extra mh_hair01 --extra mh_dress01 --extra mh_suits01  # -> assets/human (~26 MB, all options)
 npm run build:garments                                     # + modest wear and dresses (below)
 npm run build:previews                                     # thumbnails + swatches for every option (needs Chrome)
+npm run build:mobile -- --skin-2k                          # JPEG/PNG texture pack for Expo (no WebP in expo-gl)
 ```
 
 Leave out the `--extra` packs for the system set only (~14 MB). Every item loads on demand, so
@@ -63,24 +64,83 @@ npx expo install expo-gl expo-file-system three fflate
 ```tsx
 import { HumanView, useHumanPackage } from 'humanforge';
 
-const { pkg } = useHumanPackage('https://cdn.example.com/human');
-if (!pkg) return <Loading />;
+const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.5.0/assets/human';
 
-<HumanView
-  pkg={pkg}
-  framing="face"                     // or "body"
-  textureSize="1k"                   // "2k" for the editor screen
-  config={{ gender: 0.1, age: 0.2, african: 1, asian: 0, caucasian: 0,
-            skin: 'young_african_female', hair: 'afro01', hairColor: '#1a120c',
-            detail: { noseWidth: 0.3, eyeSize: 0.2 },
-            clothes: ['female_casualsuit01', 'shoes01'] }}
-  expressions={{ mouthSmile: 0.6 }}
-  style={{ width: 240, height: 240, borderRadius: 120 }}
-/>
+function Avatar({ config }) {
+  // ready = the first textured frame can be painted (manifest, body, and this look's
+  // hair/clothes/skin/eyes are on disk), not just "manifest loaded"
+  const { pkg, ready, progress } = useHumanPackage(ASSETS, { config, textureSize: '1k' });
+  if (!pkg || !ready) return <Loading progress={progress} />;
+  return (
+    <HumanView
+      pkg={pkg}
+      config={config}
+      framing="face"                 // or "body"
+      textureSize="1k"               // see the table below
+      expressions={{ mouthSmile: 0.6 }}
+      onReady={() => SplashScreen.hideAsync()}   // fires once, after the first textured frame
+      style={{ width: 240, height: 240, borderRadius: 120 }}
+    />
+  );
+}
 ```
 
-Files are cached in the app's cache directory, so later launches work offline. A ref gives you
-`avatar` (bones, `setExpression`), `render()` and `snapshot()` (PNG file URI).
+A ref gives you `avatar` (bones, `setExpression`), `render()` and `snapshot()` (PNG file URI).
+
+#### Textures on Expo: the mobile pack
+
+expo-gl uploads images through stb_image, which **can't decode WebP**: a WebP texture leaves the
+mesh black with only the lights showing. The asset package therefore ships a **mobile texture
+pack** with the same textures as baseline JPEG (opaque) and paletted PNG (hair, lashes, lace),
+in three tiers. `useHumanPackage`, `preloadHumanPackage` and `expoLoadOptions` select it
+automatically (`textureFormat: 'mobile'`); the web keeps using WebP. Nothing is converted on the
+device, and nothing large goes into your app or the npm package: files download from the CDN
+on demand and stay in the app's cache directory (offline on later launches).
+
+| `textureSize` | Max edge | Use for | First-look download* |
+| --- | --- | --- | --- |
+| `'512'` | 512 px | lists, chat bubbles, avatars under ~120 pt | ~0.8 MB |
+| `'1k'` (default) | 1024 px | profile, bust/face framing; at phone sizes this matches web 2k | ~1.2 MB |
+| `'2k'` | 2048 px (skins) | full-screen face close-ups, tablets | ~1.3 MB |
+
+\* meshes + textures of a default look (hair, outfit, shoes, skin, eyes, brows, lashes); the
+shared body and shape data add ~1.45 MB once. Brows, lashes and eye textures are small at every
+tier; textures are never upscaled.
+
+On the jsDelivr setup the pack lives on its own git tag (`mobile-v0.5.0`), because jsDelivr serves
+GitHub versions only up to 50 MB; `manifest.mobileTextures.baseUrl` points there, so you only pass
+the main URL. Self-hosting: run `npm run build:mobile` and upload `assets/human/mobile/` next to
+`manifest.json` (or pass `mobileBaseUrl`).
+
+#### Preload during the splash screen
+
+```tsx
+import { preloadHumanPackage } from 'humanforge';
+
+// resolves when the files are on disk, so the first <HumanView> paints textured at once
+await preloadHumanPackage(ASSETS, { config: savedAvatar, textureSize: '1k', onProgress: (done, total) => {} });
+```
+
+It shares its cache with `useHumanPackage` (same URL = same package, no second download).
+
+#### Performance knobs
+
+| `HumanView` prop | Default | Notes |
+| --- | --- | --- |
+| `textureSize` | `'1k'` | tiers above |
+| `pixelRatio` | device (max 3) | `2` on 3x phones renders ~55% fewer pixels and still looks sharp |
+| `antialias` | `true` | MSAA (expo-gl `msaaSamples` on iOS) |
+| `maxTextureAnisotropy` | `2` | `1` turns it off |
+| `normalMaps` | `true` | `false` skips clothing normal maps (lighter, slightly flatter fabric) |
+
+Slider, color and expression changes reuse the textures already on the GPU: only a new item
+(hair, outfit, skin tone) or a new tier loads files. `onReady` fires once per avatar, after the
+first frame with all textures; it does not fire again on later edits.
+
+Recommended: editor screen `textureSize="1k"` (or `'2k'` on tablets), lists and thumbnails
+`'512'` with `pixelRatio={2}`. For option pickers, use the static preview images and swatches
+(`getHumanCatalog`, below) rather than live 3D views: they are small WebP files shown with
+`<Image>`, which uses the platform decoder (WebP is fine there).
 
 ### 3. React / web
 
@@ -111,7 +171,7 @@ import { HumanEditor, useHumanPackage } from 'humanforge/web';
 // React Native (Expo)
 import { HumanEditor, useHumanPackage } from 'humanforge/native';
 
-const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.4.0/assets/human';
+const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.5.0/assets/human';
 const { pkg } = useHumanPackage(ASSETS);
 
 <HumanEditor

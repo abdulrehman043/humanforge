@@ -82,12 +82,30 @@ export interface HumanManifest {
   /** Iris color and round iris thumbnail per eye color (tools/build-previews.mts). */
   eyeOptions?: Record<string, { swatch: string; preview: string }>;
   textureSizes: { skin1k: number; skin2k: number; eyes: number };
+  /**
+   * JPEG/PNG copies of every WebP texture for decoders without WebP (expo-gl's stb_image),
+   * from tools/build-mobile-textures.mts. Files: `<baseUrl or dir>/<key>_<tier>.<ext>`.
+   */
+  mobileTextures?: {
+    dir: string;
+    /** Absolute URL of the pack when it is hosted apart from the manifest (e.g. a separate CDN tag). */
+    baseUrl?: string;
+    tiers: Record<TextureTier, number>;
+    files: Record<string, { ext: 'jpg' | 'png'; max: number }>;
+  };
   expressions: Record<string, string>;
 }
 interface Morph { idx: Uint16Array; d: Int16Array; scale: number }
 
 /** Loads a texture from a URL. `size` is the known square size (React Native needs it up front). */
 export type HumanTextureLoader = (url: string, size: number) => Promise<Texture>;
+
+/** Texture quality tier: max texture edge 512 / 1024 / 2048 px (smaller sources are never upscaled). */
+export type TextureTier = '512' | '1k' | '2k';
+/** 'webp': the web files. 'mobile': the JPEG/PNG pack (needed by expo-gl, which can't decode WebP). */
+export type TextureFormat = 'webp' | 'mobile';
+const TIER_PX: Record<TextureTier, number> = { '512': 512, '1k': 1024, '2k': 2048 };
+const tierFor = (px: number): TextureTier => (px >= 2048 ? '2k' : px >= 1024 ? '1k' : '512');
 
 export const webTextureLoader: HumanTextureLoader = async (url) => new TextureLoader().loadAsync(url);
 
@@ -101,12 +119,21 @@ export interface HumanPackage {
   fetchBinary: (url: string) => Promise<ArrayBuffer>;
   proxyCache: Map<string, Promise<GlbPrimitive>>;
   textureCache: Map<string, Promise<Texture>>;
+  textureFormat: TextureFormat;
+  /** URL and pixel size of a texture key ('skins/<id>', 'eyes/<id>', 'textures/<name>') at a tier. */
+  resolveTexture(key: string, tier: TextureTier, nativeSize: number): { url: string; size: number };
+  /** Load (once per URL) a texture by key and tier. */
+  getTexture(key: string, tier: TextureTier, nativeSize: number): Promise<Texture>;
 }
 
 export interface LoadOptions {
   loadTexture?: HumanTextureLoader;
   /** Override fetching (e.g. for an offline cache). Must return the raw (still gzipped) bytes. */
   fetch?: (url: string) => Promise<ArrayBuffer>;
+  /** Texture files to use. Default 'webp'; the Expo loaders use 'mobile' (falls back to WebP if the pack is missing). */
+  textureFormat?: TextureFormat;
+  /** Where the mobile pack lives. Default: manifest.mobileTextures.baseUrl, else `<baseUrl>/mobile`. */
+  mobileBaseUrl?: string;
 }
 
 /** Undo build-human's wrapping delta coding + byte planes. */
@@ -157,10 +184,107 @@ export async function loadHumanPackage(baseUrl: string, opts: LoadOptions = {}):
     }
     morphs.set(m.name, { idx, d, scale: m.scale });
   }
-  return {
-    baseUrl: root, manifest, base, morphs, body: readGlb(bodyBuf), loadTexture: opts.loadTexture ?? webTextureLoader,
-    fetchBinary, proxyCache: new Map(), textureCache: new Map(),
+  const loadTexture = opts.loadTexture ?? webTextureLoader;
+  const mobile = manifest.mobileTextures;
+  const textureFormat: TextureFormat = opts.textureFormat === 'mobile' && mobile ? 'mobile' : 'webp';
+  if (opts.textureFormat === 'mobile' && !mobile) console.warn('humanforge: this asset package has no mobile texture pack (npm run build:mobile); using WebP');
+  const mobileBase = (opts.mobileBaseUrl ?? mobile?.baseUrl ?? `${root}/${mobile?.dir ?? 'mobile'}`).replace(/\/$/, '');
+  const textureCache = new Map<string, Promise<Texture>>();
+  const resolveTexture = (key: string, tier: TextureTier, nativeSize: number) => {
+    const entry = textureFormat === 'mobile' ? mobile!.files[key] : undefined;
+    if (entry) {
+      const px = Math.min(TIER_PX[tier], entry.max, nativeSize);
+      return { url: `${mobileBase}/${key}_${tierFor(px)}.${entry.ext}`, size: px };
+    }
+    // WebP: skins come in 1k and 2k; everything else at its native size
+    if (key.startsWith('skins/')) return tier === '2k' ? { url: `${root}/${key}_2k.webp`, size: manifest.textureSizes.skin2k } : { url: `${root}/${key}_1k.webp`, size: manifest.textureSizes.skin1k };
+    return { url: `${root}/${key}.webp`, size: nativeSize };
   };
+  const getTexture = (key: string, tier: TextureTier, nativeSize: number) => {
+    const { url, size } = resolveTexture(key, tier, nativeSize);
+    let t = textureCache.get(url);
+    if (!t) {
+      t = loadTexture(url, size).then((tex) => {
+        tex.colorSpace = key.endsWith('_n') ? '' : SRGBColorSpace;
+        tex.flipY = false;
+        tex.needsUpdate = true;
+        return tex;
+      });
+      textureCache.set(url, t);
+      t.catch(() => textureCache.delete(url));
+    }
+    return t;
+  };
+  return {
+    baseUrl: root, manifest, base, morphs, body: readGlb(bodyBuf), loadTexture,
+    fetchBinary, proxyCache: new Map(), textureCache, textureFormat, resolveTexture, getTexture,
+  };
+}
+
+/** Texture key of a proxy texture path ('textures/hair-bob02.webp' -> 'textures/hair-bob02'). */
+const keyOf = (file: string) => file.replace(/\.(webp|png|jpe?g)$/, '');
+
+/**
+ * Every file a config needs for its first textured frame (proxy meshes + textures), so apps can
+ * download them ahead of time. Used by preloadHumanPackage.
+ */
+export function humanAssetsFor(pkg: HumanPackage, config: Partial<HumanConfig>, opts: { textureSize?: TextureTier; normalMaps?: boolean } = {}) {
+  const c = { ...DEFAULT_HUMAN, ...config } as HumanConfig;
+  const tier = opts.textureSize ?? '1k';
+  const ids = ['eyes-high-poly', 'teeth-teeth_base', 'tongue-tongue01'];
+  if (c.eyebrows) ids.push(`eyebrows-${c.eyebrows}`);
+  if (c.eyelashes) ids.push(`eyelashes-${c.eyelashes}`);
+  const metaOf = (id: string) => pkg.manifest.proxies.find((p) => `${p.kind}-${p.id}` === id);
+  const hidden = c.clothes.some((id) => metaOf(`clothes-${id}`)?.hidesHair);
+  if (c.hair && !hidden) ids.push(`hair-${c.hair}`);
+  for (const id of c.clothes) ids.push(`clothes-${id}`);
+  const proxies = ids.map(metaOf).filter((p): p is ProxyMeta => !!p);
+  const textures: { key: string; nativeSize: number }[] = [
+    { key: `skins/${c.skin}`, nativeSize: pkg.manifest.textureSizes.skin2k },
+    { key: `eyes/${c.eyes}`, nativeSize: pkg.manifest.textureSizes.eyes },
+  ];
+  for (const p of proxies) {
+    if (p.texture) textures.push({ key: keyOf(p.texture), nativeSize: p.textureSize });
+    if (p.normalTexture && opts.normalMaps !== false) textures.push({ key: keyOf(p.normalTexture), nativeSize: 1024 });
+  }
+  return {
+    meshes: proxies.map((p) => ({ id: `${p.kind}-${p.id}`, url: `${pkg.baseUrl}/${p.file}` })),
+    textures: textures.map((t) => ({ ...t, ...pkg.resolveTexture(t.key, tier, t.nativeSize) })),
+  };
+}
+
+export interface PreloadOptions extends LoadOptions {
+  /** The look to warm up (default DEFAULT_HUMAN): its hair, clothes, skin and eyes are downloaded too. */
+  config?: Partial<HumanConfig>;
+  textureSize?: TextureTier;
+  normalMaps?: boolean;
+  onProgress?: (done: number, total: number) => void;
+}
+
+/**
+ * Load the package and download everything the first textured frame of `config` needs. Resolves
+ * when those files are fetched (and, with the Expo loaders, on disk), not just the manifest.
+ */
+export async function preloadHumanPackage(baseUrl: string, opts: PreloadOptions = {}): Promise<HumanPackage> {
+  const pkg = await loadHumanPackage(baseUrl, opts);
+  await warmHumanPackage(pkg, opts);
+  return pkg;
+}
+
+/** Download the meshes and textures for a config into the package caches (see preloadHumanPackage). */
+export async function warmHumanPackage(pkg: HumanPackage, opts: Omit<PreloadOptions, keyof LoadOptions> = {}) {
+  const { meshes, textures } = humanAssetsFor(pkg, opts.config ?? {}, opts);
+  const total = meshes.length + textures.length;
+  let done = 0;
+  const tick = () => opts.onProgress?.(++done, total);
+  await Promise.all([
+    ...meshes.map(async (m) => {
+      let p = pkg.proxyCache.get(m.id);
+      if (!p) { p = pkg.fetchBinary(m.url).then(readGlb); pkg.proxyCache.set(m.id, p); p.catch(() => pkg.proxyCache.delete(m.id)); }
+      await p; tick();
+    }),
+    ...textures.map(async (t) => { await pkg.getTexture(t.key, opts.textureSize ?? '1k', t.nativeSize); tick(); }),
+  ]);
 }
 
 // ---------------------------------------------------------------- shape evaluation
@@ -295,7 +419,12 @@ export class HumanAvatar {
   private exprDeltas: Float32Array[];
   private skinMat: MeshStandardMaterial;
   private version = 0;
-  textureSize: '1k' | '2k' = '2k';
+  /** Texture tier; set before the first setConfig (changing it later reloads textures). */
+  textureSize: TextureTier = '2k';
+  /** Anisotropic filtering for textures (1 = off). Lower is cheaper on phones. */
+  anisotropy = 4;
+  /** Load clothing normal maps. Turn off for lighter mobile materials. */
+  normalMaps = true;
 
   constructor(pkg: HumanPackage) {
     this.pkg = pkg;
@@ -358,8 +487,8 @@ export class HumanAvatar {
       return [slot, await this.loadProxy(id)] as const;
     });
     const sizes = this.pkg.manifest.textureSizes;
-    const skin = this.texture(`skins/${c.skin}_${this.textureSize}.webp`, this.textureSize === '2k' ? sizes.skin2k : sizes.skin1k);
-    const eyes = this.texture(`eyes/${c.eyes}.webp`, sizes.eyes);
+    const skin = this.texture(`skins/${c.skin}`, sizes.skin2k);
+    const eyes = this.texture(`eyes/${c.eyes}`, sizes.eyes);
     const loaded = await Promise.all(loads);
     const [skinTex, eyeTex] = await Promise.all([skin, eyes]);
     if (v !== this.version) return; // a newer setConfig superseded this one
@@ -371,20 +500,47 @@ export class HumanAvatar {
       this.group.add(entry[1].mesh);
       if (entry[1].soft) this.group.add(entry[1].soft);
     }
-    this.skinMat.map = skinTex;
+    // only touch the material when the texture really changed (slider edits keep the same one)
+    if (this.skinMat.map !== skinTex) {
+      if (!this.skinMat.map) this.skinMat.needsUpdate = true; // null -> texture changes the shader
+      this.skinMat.map = skinTex;
+    }
     this.skinMat.color.set(c.skinTint);
-    this.skinMat.needsUpdate = true;
     for (const [slot, p] of this.proxies) {
       const m = p.mesh.material as MeshStandardMaterial;
       if (slot === 'hair') { m.color.set(c.hairColor); (p.soft?.material as MeshStandardMaterial | undefined)?.color.set(c.hairColor); }
       if (slot === 'eyebrows') m.color.set(c.eyebrowColor);
-      if (slot === 'eyes' && m.map !== eyeTex) { m.map = eyeTex; m.needsUpdate = true; }
+      if (slot === 'eyes' && m.map !== eyeTex) { if (!m.map) m.needsUpdate = true; m.map = eyeTex; }
       if (p.meta.kind === 'clothes' && p.meta.tintable) m.color.set(c.garmentColors?.[clothingInfo(p.meta.id).slot] ?? p.meta.color ?? '#ffffff');
     }
     this.reshape();
   }
 
   getConfig(): HumanConfig { return this.config; }
+
+  /**
+   * Re-apply textures after changing textureSize, anisotropy or normalMaps (meshes stay as they
+   * are; already-loaded files come from the cache).
+   */
+  async reloadTextures() {
+    const c = this.config, sizes = this.pkg.manifest.textureSizes;
+    const v = this.version;
+    const [skin, eyes] = await Promise.all([this.texture(`skins/${c.skin}`, sizes.skin2k), this.texture(`eyes/${c.eyes}`, sizes.eyes)]);
+    const maps = await Promise.all([...this.proxies.values()].map(async (p) => [p,
+      p.meta.texture ? await this.texture(keyOf(p.meta.texture), p.meta.textureSize) : null,
+      p.meta.normalTexture && this.normalMaps ? await this.texture(keyOf(p.meta.normalTexture), 1024) : null] as const));
+    if (v !== this.version) return; // a setConfig happened meanwhile and used the new settings
+    this.skinMat.map = skin;
+    for (const [p, map, normal] of maps) {
+      for (const m of [p.mesh.material, p.soft?.material].filter(Boolean) as MeshStandardMaterial[]) {
+        const shaderChange = !!m.normalMap !== !!normal;
+        if (p.meta.tileable) for (const t of [map, normal]) if (t && t.wrapS !== RepeatWrapping) { t.wrapS = t.wrapT = RepeatWrapping; t.needsUpdate = true; }
+        if (p.meta.kind === 'eyes') m.map = eyes; else if (map) m.map = map;
+        m.normalMap = normal;
+        if (shaderChange) m.needsUpdate = true;
+      }
+    }
+  }
 
   /** Expression by ARKit-style name (e.g. 'jawOpen', 'mouthSmile') or MPFB unit name, weight 0..1. */
   setExpression(name: string, weight: number) {
@@ -396,20 +552,11 @@ export class HumanAvatar {
   }
   get expressionNames() { return this.exprNames.map((u) => this.alias(u)); }
 
-  private texture(file: string, size: number): Promise<Texture> {
-    const url = `${this.pkg.baseUrl}/${file}`;
-    let t = this.pkg.textureCache.get(url);
-    if (!t) {
-      t = this.pkg.loadTexture(url, size).then((tex) => {
-        tex.colorSpace = file.endsWith('_n.webp') ? '' : SRGBColorSpace;
-        tex.flipY = false;
-        tex.anisotropy = 4;
-        tex.needsUpdate = true;
-        return tex;
-      });
-      this.pkg.textureCache.set(url, t);
-    }
-    return t;
+  private texture(key: string, nativeSize: number): Promise<Texture> {
+    return this.pkg.getTexture(key, this.textureSize, nativeSize).then((tex) => {
+      if (tex.anisotropy !== this.anisotropy) { tex.anisotropy = this.anisotropy; tex.needsUpdate = true; }
+      return tex;
+    });
   }
 
   private async loadProxy(fullId: string): Promise<ProxyInstance | null> {
@@ -422,8 +569,8 @@ export class HumanAvatar {
     }
     const [prim, map, normalMap] = await Promise.all([
       p,
-      meta.texture ? this.texture(meta.texture, meta.textureSize) : null,
-      meta.normalTexture ? this.texture(meta.normalTexture, 1024) : null,
+      meta.texture ? this.texture(keyOf(meta.texture), meta.textureSize) : null,
+      meta.normalTexture && this.normalMaps ? this.texture(keyOf(meta.normalTexture), 1024) : null,
     ]);
     const geo = geometryFrom(prim, '_JOINTS', '_WEIGHTS');
     const refs = asU16(prim.attributes._REFS), refw = toFloat(prim.attributes._REFW), offs = toFloat(prim.attributes._OFFS);

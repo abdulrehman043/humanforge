@@ -31,9 +31,11 @@ rim.position.set(-2, 2, -2);
 scene.add(key, rim, new HemisphereLight('#ffffff', '#b9a99a', 0.45));
 const camera = new PerspectiveCamera(22, 1, 0.01, 50);
 
-const pkg = await loadHumanPackage('/human');
+// ?tex=mobile&tier=1k renders with the JPEG/PNG mobile pack (to compare against WebP)
+const qp = new URLSearchParams(location.search);
+const pkg = await loadHumanPackage('/human', { textureFormat: qp.get('tex') === 'mobile' ? 'mobile' : 'webp' });
 const avatar = new HumanAvatar(pkg);
-avatar.textureSize = '1k';
+avatar.textureSize = (qp.get('tier') as any) || '1k';
 scene.add(avatar.group);
 
 const bone = (re: RegExp) => avatar.bones.find((b) => re.test(b.name))!.getWorldPosition(new Vector3());

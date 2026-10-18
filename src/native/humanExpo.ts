@@ -1,5 +1,9 @@
 // React Native (Expo) adapters for the realistic human: a disk-cached fetcher and an
-// expo-gl texture loader. Pass both to loadHumanPackage (useHumanPackage does it for you).
+// expo-gl texture loader. Pass expoLoadOptions to loadHumanPackage / preloadHumanPackage
+// (useHumanPackage does it for you).
+//
+// expo-gl decodes images with stb_image, which has no WebP support, so these options select the
+// JPEG/PNG mobile texture pack (manifest.mobileTextures, built by `npm run build:mobile`).
 import * as FileSystem from 'expo-file-system/legacy';
 import { Texture } from 'three';
 import type { HumanTextureLoader, LoadOptions } from '../human/runtime';
@@ -7,20 +11,34 @@ import type { HumanTextureLoader, LoadOptions } from '../human/runtime';
 const DIR = `${FileSystem.cacheDirectory ?? ''}humanforge/`;
 let dirReady: Promise<void> | null = null;
 
-/** Download once into the cache directory; later sessions load offline. */
-async function cached(url: string): Promise<string> {
-  dirReady ??= FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
-  await dirReady;
-  const file = DIR + url.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9._-]/g, '_');
-  const info = await FileSystem.getInfoAsync(file);
-  if (!info.exists) {
-    const res = await FileSystem.downloadAsync(url, file);
-    if (res.status !== 200) {
-      await FileSystem.deleteAsync(file, { idempotent: true });
-      throw new Error(`humanforge: ${res.status} for ${url}`);
-    }
+const inflight = new Map<string, Promise<string>>();
+
+/**
+ * Download once into the cache directory; later sessions load offline. Concurrent requests for
+ * the same URL share one download, and files are written to a temp name and moved into place, so
+ * an interrupted download never leaves a broken file in the cache.
+ */
+export function cached(url: string): Promise<string> {
+  let p = inflight.get(url);
+  if (!p) {
+    p = (async () => {
+      dirReady ??= FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
+      await dirReady;
+      const file = DIR + url.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9._-]/g, '_');
+      if ((await FileSystem.getInfoAsync(file)).exists) return file;
+      const tmp = `${file}.${Date.now()}.part`;
+      const res = await FileSystem.downloadAsync(url, tmp);
+      if (res.status !== 200) {
+        await FileSystem.deleteAsync(tmp, { idempotent: true });
+        throw new Error(`humanforge: ${res.status} for ${url}`);
+      }
+      await FileSystem.moveAsync({ from: tmp, to: file });
+      return file;
+    })();
+    inflight.set(url, p);
+    p.catch(() => {}).finally(() => inflight.delete(url));
   }
-  return file;
+  return p;
 }
 
 const B64 = new Uint8Array(128);
@@ -43,16 +61,20 @@ export const expoFetch = async (url: string): Promise<ArrayBuffer> =>
 
 /**
  * expo-gl decodes images natively when texImage2D receives `{ localUri }`, so we hand three
- * a "data texture" whose data is the cached file (same trick expo-three uses).
+ * a "data texture" whose data is the cached file (same trick expo-three uses). The file must be
+ * JPEG or PNG (stb_image); WebP uploads silently fail and the mesh renders black.
  */
 export const expoTextureLoader: HumanTextureLoader = async (url, size) => {
+  if (/\.webp$/i.test(url)) console.warn(`humanforge: expo-gl can't decode WebP (${url}); build/host the mobile texture pack`);
   const localUri = await cached(url);
   const tex = new Texture();
   tex.image = { data: { localUri }, width: size, height: size };
   (tex as any).isDataTexture = true;
-  tex.generateMipmaps = false;
+  // all pack textures are power-of-two squares, so mipmaps work and avoid shimmer at bust framing
+  tex.generateMipmaps = true;
   tex.needsUpdate = true;
   return tex;
 };
 
-export const expoLoadOptions: LoadOptions = { fetch: expoFetch, loadTexture: expoTextureLoader };
+/** Options for loadHumanPackage / preloadHumanPackage on Expo: disk cache + JPEG/PNG textures. */
+export const expoLoadOptions: LoadOptions = { fetch: expoFetch, loadTexture: expoTextureLoader, textureFormat: 'mobile' };

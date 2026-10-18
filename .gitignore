@@ -1,3 +1,6 @@
 node_modules
 .DS_Store
 dist
+
+# mobile texture pack is published on its own tag (mobile-v*), see README
+assets/human/mobile/
