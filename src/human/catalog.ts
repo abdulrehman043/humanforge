@@ -132,6 +132,53 @@ export const HUMAN_HAIR_COLORS: { id: string; label: string; color: string }[] =
 /** Skin tint presets (multiplied over the skin texture; white = texture as-is). */
 export const SKIN_TINTS = ['#ffffff', '#fbefe6', '#f5e3d3', '#ffe9dc', '#efe2d6', '#e8d4c4'];
 
+/**
+ * Skin tone palette shown as swatches. Each tone is a base skin texture family plus a tint
+ * (multiplied over it). The texture's age and gender variant is picked automatically from the
+ * avatar's age and gender (see skinFor), so users only ever choose a color.
+ */
+export interface SkinToneDef { id: string; base: 'caucasian' | 'caucasian2' | 'asian' | 'african'; tint: string }
+export const HUMAN_SKIN_TONES: SkinToneDef[] = [
+  { id: 'porcelain', base: 'caucasian2', tint: '#ffffff' },
+  { id: 'fair', base: 'caucasian', tint: '#ffffff' },
+  { id: 'light', base: 'caucasian', tint: '#f4e2cf' },
+  { id: 'beige', base: 'asian', tint: '#ffffff' },
+  { id: 'warm', base: 'asian', tint: '#f2dcc2' },
+  { id: 'olive', base: 'asian', tint: '#e0c4a2' },
+  { id: 'tan', base: 'caucasian', tint: '#d4ad86' },
+  { id: 'caramel', base: 'asian', tint: '#c99f78' },
+  { id: 'chestnut', base: 'asian', tint: '#ab7f5c' },
+  { id: 'mocha', base: 'asian', tint: '#8d6649' },
+  { id: 'brown', base: 'african', tint: '#ffffff' },
+  { id: 'deep', base: 'african', tint: '#d2bcaa' },
+  { id: 'ebony', base: 'african', tint: '#a99383' },
+];
+
+/** Skin texture family of a skin id, e.g. young_caucasian_female2 -> caucasian2. */
+export function skinBase(id: string): SkinToneDef['base'] {
+  // check caucasian first: 'caucasian' contains 'asian'
+  const eth = id.includes('caucasian') ? 'caucasian' : id.includes('african') ? 'african' : id.includes('asian') ? 'asian' : 'caucasian';
+  return (eth === 'caucasian' && /2$/.test(id) ? 'caucasian2' : eth) as SkinToneDef['base'];
+}
+
+/** The skin texture for a tone family that best matches an age (0..1) and gender (0..1). */
+export function skinFor(skins: string[], base: string, age: number, gender: number): string | null {
+  const eth = base.replace(/2$/, ''), variant = base.endsWith('2') ? '2' : '';
+  const g = gender < 0.5 ? 'female' : 'male';
+  const ages = age < 0.24 ? ['young', 'middleage', 'old'] : age < 0.52 ? ['middleage', 'young', 'old'] : ['old', 'middleage', 'young'];
+  for (const a of ages) for (const v of [variant, '']) {
+    const id = `${a}_${eth}_${g}${v}`;
+    if (skins.includes(id)) return id;
+  }
+  return skins.find((id) => skinBase(id) === base) ?? skins.find((id) => skinBase(id).replace(/2$/, '') === eth) ?? null;
+}
+
+const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+const hex = (c: number[]) => '#' + c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
+/** Multiply two hex colors (how a tint combines with a skin texture). */
+export const multiplyHex = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return hex(x.map((v, i) => v * y[i])); };
+export const hexDistance = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+
 const words = (s: string) => s.replace(/_/g, ' ').replace(/(\d+)$/, ' $1').replace(/\s+/g, ' ').trim();
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

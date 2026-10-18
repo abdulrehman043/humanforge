@@ -3,7 +3,7 @@
 //
 //   <HumanEditor pkg={pkg} options={{ gender: 'female', exclude: ['ears'] }} onSave={(config, png) => save(config)} />
 import React, { useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, PanResponder, Pressable, ScrollView, StyleSheet, Text, View, ViewStyle, StyleProp } from 'react-native';
+import { Image, LayoutChangeEvent, PanResponder, Pressable, ScrollView, StyleSheet, Text, View, ViewStyle, StyleProp } from 'react-native';
 import type { HumanConfig, HumanPackage } from '../human/runtime';
 import { EditorControl, HumanEditorModel as EditorModel, HumanEditorOptions, createHumanEditor } from '../human/editor';
 import { HumanView, HumanViewHandle } from './HumanView';
@@ -32,7 +32,7 @@ export function HumanEditor({
   pkg, options, editor: given, value, defaultValue, onChange, onSave, onCancel, saveLabel = 'Save', randomize = true,
   accentColor = '#1d1d1f', background = '#e9ecf1', style,
 }: HumanEditorProps) {
-  const editor = useMemo(() => given ?? createHumanEditor(pkg.manifest, options), [given, pkg, JSON.stringify(options)]);
+  const editor = useMemo(() => given ?? createHumanEditor(pkg, options), [given, pkg, JSON.stringify(options)]);
   const [inner, setInner] = useState<HumanConfig>(() => editor.normalize(defaultValue ?? null));
   const config = value ? editor.normalize(value) : inner;
   const [tab, setTab] = useState(0);
@@ -110,15 +110,31 @@ function Control({ ctl, config, onChange, accent }: { ctl: EditorControl; config
     );
   }
   const v = ctl.value(config);
+  if (ctl.display === 'swatch') {
+    return (
+      <View style={s.block}>
+        <Text style={s.blockLabel}>{ctl.label}</Text>
+        <View style={s.wrap}>
+          {ctl.options.map((o) => (
+            <Pressable key={o.id ?? 'none'} accessibilityLabel={o.label} onPress={() => onChange(ctl.apply(config, o.id))}
+              style={[s.swatch, { backgroundColor: o.swatch ?? '#eee' }, o.id === v && { borderColor: accent }]}>
+              {o.preview ? <Image source={{ uri: o.preview }} style={s.swatchImg} /> : null}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={s.block}>
       <Text style={s.blockLabel}>{ctl.label}</Text>
       <View style={s.wrap}>
         {ctl.options.map((o) => (
-          <Pressable key={o.id ?? 'none'} onPress={() => onChange(ctl.apply(config, o.id))}
-            style={[s.choice, o.id === v && { borderColor: accent, borderWidth: 2 }]}>
-            {o.swatch ? <View style={[s.dot, { backgroundColor: o.swatch }]} /> : null}
-            <Text style={[s.choiceText, o.id === v && { fontWeight: '700' }]}>{o.label}</Text>
+          <Pressable key={o.id ?? 'none'} accessibilityLabel={o.label} onPress={() => onChange(ctl.apply(config, o.id))}
+            style={[s.tile, o.id === v && { borderColor: accent, borderWidth: 2, backgroundColor: '#fff' }]}>
+            {o.id === null ? <View style={s.none}><View style={s.noneBar} /></View>
+              : o.preview ? <Image source={{ uri: o.preview }} style={s.tileImg} resizeMode="contain" />
+              : <Text style={s.choiceText}>{o.label}</Text>}
           </Pressable>
         ))}
       </View>
@@ -173,10 +189,13 @@ const s = StyleSheet.create({
   block: { marginVertical: 10 },
   blockLabel: { fontSize: 13, fontWeight: '600', color: '#333', marginBottom: 8 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  choice: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#e1e3e7', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, minWidth: 64, justifyContent: 'center' },
-  choiceText: { fontSize: 12, color: '#1d1d1f' },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  swatch: { width: 32, height: 32, borderRadius: 16, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  tile: { width: 76, height: 76, borderRadius: 12, borderWidth: 1, borderColor: '#e1e3e7', backgroundColor: '#f4f5f7', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 3 },
+  tileImg: { width: '100%', height: '100%' },
+  none: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#9aa0a8', alignItems: 'center', justifyContent: 'center' },
+  noneBar: { width: 30, height: 2, backgroundColor: '#9aa0a8', transform: [{ rotate: '-45deg' }] },
+  choiceText: { fontSize: 11, color: '#555', textAlign: 'center' },
+  swatch: { width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  swatchImg: { width: '100%', height: '100%' },
   slider: { flex: 1, height: 32, justifyContent: 'center' },
   track: { height: 4, borderRadius: 2, backgroundColor: '#e3e5e8', overflow: 'hidden' },
   fill: { height: 4 },

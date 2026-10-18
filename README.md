@@ -32,6 +32,7 @@ done
 npm run build:human -- mpfb2/src/mpfb/data mh_assets \
   --extra mh_hair01 --extra mh_dress01 --extra mh_suits01  # -> assets/human (~26 MB, all options)
 npm run build:garments                                     # + modest wear and dresses (below)
+npm run build:previews                                     # thumbnails + swatches for every option (needs Chrome)
 ```
 
 Leave out the `--extra` packs for the system set only (~14 MB). Every item loads on demand, so
@@ -110,7 +111,7 @@ import { HumanEditor, useHumanPackage } from 'humanforge/web';
 // React Native (Expo)
 import { HumanEditor, useHumanPackage } from 'humanforge/native';
 
-const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.2.0/assets/human';
+const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.4.0/assets/human';
 const { pkg } = useHumanPackage(ASSETS);
 
 <HumanEditor
@@ -135,7 +136,9 @@ const { pkg } = useHumanPackage(ASSETS);
 | `sections` | Which tabs to show, in order. |
 | `exclude` / `include` | Hide (or whitelist) whole sections or single controls: `'ears'`, `'hair.color'`, `'nose.noseWidth'`, `'body.weight'`… |
 | `items` | Allowed ids per slot: `hair`, `headwear`, `outfit`, `shoes`, `hat`, `skin`, `eyes`, `eyebrows`, `eyelashes`. |
-| `colors` | Palettes for `hair`, `eyebrows`, `skinTint` and `garments` (outfit/headwear fabric). |
+| `colors` | Palettes for `hair`, `eyebrows` and `garments` (outfit/headwear fabric). |
+| `skinTones` | Skin tone ids to offer, in order (default: all of `HUMAN_SKIN_TONES`, light to deep). |
+| `featureSliders` | Also show the face-feature mix sliders (african / asian / caucasian morphs). Off by default. |
 | `optional` | Slots that offer "None" (`hair`, `hat`, `headwear`, `eyebrows`, `shoes`). |
 | `detailRange` | Caps the face/body detail sliders (0..1). |
 | `defaults` / `locked` | Starting values / values that are always enforced. |
@@ -145,7 +148,42 @@ The config is plain JSON; store it as-is. On load, `editor.normalize(saved)` (do
 `<HumanEditor>`) repairs anything the current options don't allow. For example, a male outfit in
 a female-only app gets swapped for a women's one. To display the avatar elsewhere, use
 `<HumanCanvas>` (web) or `<HumanView>` (React Native) with the saved config. To build your own UI,
-`createHumanEditor(pkg.manifest, options)` returns the same sections and controls as data.
+`createHumanEditor(pkg, options)` returns the same sections and controls as data.
+
+#### Previews and swatches (no text options)
+
+Every pickable option ships with a picture or a color, so your UI never has to print item names:
+
+| Attribute (`key`) | Shown as | Source |
+| --- | --- | --- |
+| `skin.tone` | round swatch | 11 tones, light to deep; the texture's age/gender variant follows the avatar automatically |
+| `eyes.color` | round iris image + swatch | `previews/eyes-<id>.webp` |
+| `eyes.lashes`, `brows.style` | thumbnail | close-up renders |
+| `hair.style`, `headwear.style`, `hat.style` | thumbnail | head renders (3/4 view) |
+| `outfit.style` | thumbnail | full-body renders |
+| `shoes.style` | thumbnail | shoe close-ups |
+| `hair.color`, `brows.color`, `outfit.color`, `headwear.color` | round swatch | palettes |
+
+Thumbnails are 192 px transparent WebP files in `assets/human/previews/`, so they sit on any
+background. `None` options have `id: null` and no preview (the built-in editors draw a ⌀ icon).
+
+```tsx
+import { getHumanCatalog } from 'humanforge/human';
+
+const attrs = getHumanCatalog(pkg, { gender: 'female' });   // same options as <HumanEditor>
+const hair = attrs.find((a) => a.key === 'hair.style')!;
+hair.options;        // [{ id: 'long01', label: 'Long straight', preview: 'https://…/previews/hair-long01.webp' }, …]
+hair.value(config);  // selected id
+config = hair.apply(config, 'bob02');                        // new, normalized config
+
+<Image source={{ uri: option.preview }} />                   // display 'image'
+<View style={{ backgroundColor: option.swatch }} />          // display 'swatch'
+```
+
+`label` is only an accessible name (`aria-label` / `accessibilityLabel`); translate it with the
+`labels` option if you show it. The face-feature mix (`african` / `asian` / `caucasian`) is no longer
+shown by default: picking a skin tone only changes color. The selfie fit still sets the mix, and
+`featureSliders: true` brings the sliders back.
 
 ### 4. Selfie to avatar
 
@@ -271,6 +309,7 @@ codes stay valid.
 ```bash
 npm install
 npm run build:human -- <mpfb data> <system assets>   # see above
+npm run build:previews   # option thumbnails + swatches (headless Chrome via puppeteer-core)
 npm test          # both modes: every option builds, codec round-trips, human package decodes, selfie solver
 npm run typecheck
 npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)

@@ -35,7 +35,7 @@ export function HumanEditor({
   pkg, options, editor: given, value, defaultValue, onChange, onSave, saveLabel = 'Save', selfie = false, randomize = true,
   accentColor = '#1d1d1f', background = '#e9ecf1', className, style,
 }: HumanEditorProps) {
-  const editor = useMemo(() => given ?? createHumanEditor(pkg.manifest, options), [given, pkg, JSON.stringify(options)]);
+  const editor = useMemo(() => given ?? createHumanEditor(pkg, options), [given, pkg, JSON.stringify(options)]);
   const [inner, setInner] = useState<HumanConfig>(() => editor.normalize(defaultValue ?? null));
   const config = value ? editor.normalize(value) : inner;
   const [tab, setTab] = useState(0);
@@ -136,18 +136,39 @@ function Control({ ctl, config, onChange }: { ctl: EditorControl; config: HumanC
     );
   }
   const v = ctl.value(config);
+  if (ctl.display === 'swatch') {
+    return (
+      <div className="hf-block">
+        <span className="hf-label">{ctl.label}</span>
+        <div className="hf-swatches">
+          {ctl.options.map((o) => (
+            <button key={o.id ?? 'none'} aria-label={o.label} title={o.label} className={`hf-swatch ${o.id === v ? 'on' : ''}`}
+              style={{ background: o.preview ? `center/cover url("${o.preview}") ${o.swatch ?? ''}` : o.swatch ?? '#eee' }}
+              onClick={() => onChange(ctl.apply(config, o.id))} />
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="hf-block">
       <span className="hf-label">{ctl.label}</span>
-      <div className="hf-choices">
+      <div className="hf-tiles">
         {ctl.options.map((o) => (
-          <button key={o.id ?? 'none'} className={`hf-choice ${o.id === v ? 'on' : ''}`} onClick={() => onChange(ctl.apply(config, o.id))}>
-            {o.swatch && <i style={{ background: o.swatch }} />}
-            {o.label}
+          <button key={o.id ?? 'none'} aria-label={o.label} title={o.label} className={`hf-tile ${o.id === v ? 'on' : ''}`} onClick={() => onChange(ctl.apply(config, o.id))}>
+            {o.id === null ? <NoneIcon /> : o.preview ? <img src={o.preview} alt="" loading="lazy" draggable={false} /> : <span>{o.label}</span>}
           </button>
         ))}
       </div>
     </div>
+  );
+}
+
+function NoneIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="#9aa0a8" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="9" /><path d="M5.6 18.4 18.4 5.6" />
+    </svg>
   );
 }
 
@@ -174,13 +195,13 @@ const CSS = `
 .hf-label{font-size:12px;color:#666}
 .hf-block{margin:12px 0}
 .hf-block>.hf-label{display:block;margin-bottom:8px;font-weight:600;color:#333}
-.hf-choices{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
-.hf-choice{display:flex;align-items:center;gap:6px;justify-content:center;border:1px solid #e1e3e7;background:#fff;border-radius:10px;padding:9px 8px;font:inherit;font-size:12px;cursor:pointer;text-align:center}
-.hf-choice:hover{border-color:#c5c8ce}
-.hf-choice.on{border-color:var(--hf-accent);box-shadow:inset 0 0 0 1px var(--hf-accent);font-weight:600}
-.hf-choice i{width:12px;height:12px;border-radius:50%;flex:none}
-.hf-swatches{display:flex;flex-wrap:wrap;gap:8px}
-.hf-swatch{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #d5d8dd;cursor:pointer;padding:0}
+.hf-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
+.hf-tile{aspect-ratio:1;display:grid;place-items:center;border:1px solid #e1e3e7;background:#f4f5f7;border-radius:12px;padding:4px;cursor:pointer;overflow:hidden;font:inherit;font-size:11px;color:#555}
+.hf-tile:hover{border-color:#c5c8ce}
+.hf-tile.on{border-color:var(--hf-accent);box-shadow:inset 0 0 0 2px var(--hf-accent);background:#fff}
+.hf-tile img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+.hf-swatches{display:flex;flex-wrap:wrap;gap:10px}
+.hf-swatch{width:34px;height:34px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #d5d8dd;cursor:pointer;padding:0}
 .hf-swatch.on{box-shadow:0 0 0 2px var(--hf-accent)}
 .hf-save{margin:12px 16px 16px;border:0;border-radius:12px;padding:12px;background:var(--hf-accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
 @container (max-width:720px){.hf-editor{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(260px,52%) minmax(0,1fr)}.hf-panel{border-left:0;border-top:1px solid #eceef1}}

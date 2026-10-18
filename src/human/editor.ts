@@ -6,9 +6,11 @@
 //   editor.sections   -> [{ id: 'face', label: 'Face', controls: [...] }, ...]
 //   editor.initial    -> a valid HumanConfig that respects the options
 //   editor.normalize(savedConfig) -> clamps/repairs any config to the options (use on load)
-import { DEFAULT_HUMAN, HumanConfig, HumanManifest } from './runtime';
+import { DEFAULT_HUMAN, HumanConfig, HumanManifest, HumanPackage } from './runtime';
 import { DETAIL_SLIDERS, MACRO_SLIDERS } from './sliders';
-import { EYE_LABELS, EYE_SWATCH, GARMENT_COLORS, HUMAN_HAIR_COLORS, SKIN_TINTS, clothingInfo, fits, hairInfo, skinInfo } from './catalog';
+import {
+  EYE_LABELS, EYE_SWATCH, GARMENT_COLORS, HUMAN_HAIR_COLORS, HUMAN_SKIN_TONES, clothingInfo, fits, hairInfo, hexDistance, multiplyHex, skinBase, skinFor, skinInfo,
+} from './catalog';
 
 export type EditorGender = 'female' | 'male' | 'any';
 export type SectionId = 'body' | 'face' | 'skin' | 'eyes' | 'brows' | 'nose' | 'mouth' | 'ears' | 'hair' | 'headwear' | 'outfit' | 'shoes' | 'hat';
@@ -28,7 +30,11 @@ export interface HumanEditorOptions {
   /** Allowed item ids per slot (default: everything that fits the gender). */
   items?: Partial<Record<ItemSlot, string[]>>;
   /** Color palettes. */
-  colors?: { hair?: string[]; eyebrows?: string[]; skinTint?: string[]; garments?: string[] };
+  colors?: { hair?: string[]; eyebrows?: string[]; garments?: string[] };
+  /** Skin tone ids to offer (see HUMAN_SKIN_TONES), in order. Default: all, light to deep. */
+  skinTones?: string[];
+  /** Also show the face-feature mix sliders (african / asian / caucasian morphs). Default false. */
+  featureSliders?: boolean;
   /** Slots that may be empty ("None" option). Default: hat, headwear and eyebrows. */
   optional?: Partial<Record<'hair' | 'hat' | 'headwear' | 'eyebrows' | 'shoes', boolean>>;
   /** Max magnitude of face/body detail sliders (0..1). Lower keeps faces more natural. Default 1. */
@@ -43,8 +49,23 @@ export interface HumanEditorOptions {
 
 interface Base { id: string; label: string }
 export interface SliderControl extends Base { kind: 'slider'; min: number; max: number; step: number; value(c: HumanConfig): number; apply(c: HumanConfig, v: number): HumanConfig }
-export interface ChoiceOption { id: string | null; label: string; swatch?: string }
-export interface ChoiceControl extends Base { kind: 'choice'; options: ChoiceOption[]; value(c: HumanConfig): string | null; apply(c: HumanConfig, v: string | null): HumanConfig }
+export interface ChoiceOption {
+  id: string | null;
+  /** Accessible name (the built-in editors don't print it when a preview or swatch exists). */
+  label: string;
+  /** Hex color to show as a round swatch (skin tones, eye colors). */
+  swatch?: string;
+  /** Absolute URL of a transparent WebP thumbnail (hair, brows, lashes, clothes, eyes). */
+  preview?: string;
+}
+export interface ChoiceControl extends Base {
+  kind: 'choice';
+  /** 'image': tiles with previews; 'swatch': round color swatches. */
+  display: 'image' | 'swatch';
+  options: ChoiceOption[];
+  value(c: HumanConfig): string | null;
+  apply(c: HumanConfig, v: string | null): HumanConfig;
+}
 export interface ColorControl extends Base { kind: 'color'; colors: string[]; value(c: HumanConfig): string; apply(c: HumanConfig, v: string): HumanConfig }
 export type EditorControl = SliderControl | ChoiceControl | ColorControl;
 export interface EditorSection { id: SectionId; label: string; framing: 'face' | 'body'; controls: EditorControl[] }
@@ -85,7 +106,15 @@ const GENDER_DEFAULTS: Record<'female' | 'male', Partial<HumanConfig>> = {
 
 const withDetail = (c: HumanConfig, id: string, v: number): HumanConfig => ({ ...c, detail: { ...c.detail, [id]: v } });
 
-export function createHumanEditor(manifest: HumanManifest, options: HumanEditorOptions = {}): HumanEditorModel {
+/**
+ * Build the editor model. Pass the loaded package (preferred: option previews get absolute URLs)
+ * or just its manifest.
+ */
+export function createHumanEditor(source: HumanPackage | HumanManifest, options: HumanEditorOptions = {}): HumanEditorModel {
+  const manifest: HumanManifest = 'manifest' in source ? source.manifest : source;
+  const baseUrl = 'manifest' in source ? source.baseUrl.replace(/\/$/, '') + '/' : '';
+  const url = (rel?: string) => (rel ? baseUrl + rel : undefined);
+  const proxyPreview = (kind: string, id: string) => url(manifest.proxies.find((p) => p.kind === kind && p.id === id)?.preview);
   const gender = options.gender ?? 'any';
   const exclude = new Set(options.exclude ?? []);
   const include = options.include ? new Set(options.include) : null;
@@ -116,7 +145,25 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
 
   const hairColors = options.colors?.hair ?? HUMAN_HAIR_COLORS.map((h) => h.color);
   const browColors = options.colors?.eyebrows ?? hairColors;
-  const tints = options.colors?.skinTint ?? SKIN_TINTS;
+  // skin tones: base texture family x tint, previewed as the color it renders
+  const skinIds = allowed.skin;
+  const baseColor = (base: string) => {
+    const cols = manifest.skins.filter((s) => skinBase(s.id) === base && s.swatch && skinIds.includes(s.id)).map((s) => s.swatch!);
+    if (!cols.length) return null;
+    const avg = [1, 3, 5].map((i) => cols.reduce((a, c) => a + parseInt(c.slice(i, i + 2), 16), 0) / cols.length);
+    return '#' + avg.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+  };
+  const lum = (h: string) => 0.299 * parseInt(h.slice(1, 3), 16) + 0.587 * parseInt(h.slice(3, 5), 16) + 0.114 * parseInt(h.slice(5, 7), 16);
+  const tones = HUMAN_SKIN_TONES
+    .filter((t) => (!options.skinTones || options.skinTones.includes(t.id)) && skinIds.some((id) => skinBase(id) === t.base))
+    .map((t) => ({ ...t, swatch: multiplyHex(baseColor(t.base) ?? '#c9a58a', t.tint) }));
+  if (!options.skinTones) tones.sort((a, b) => lum(b.swatch) - lum(a.swatch));
+  const toneOf = (c: HumanConfig) => {
+    const base = skinBase(c.skin);
+    const same = tones.filter((t) => t.base === base);
+    const pool = same.length ? same : tones;
+    return pool.reduce((best, t) => (hexDistance(t.tint, c.skinTint) < hexDistance(best.tint, c.skinTint) ? t : best), pool[0]);
+  };
   const garmentColors = options.colors?.garments ?? GARMENT_COLORS.map((g) => g.color);
   const tintable = (id: string) => !!manifest.proxies.find((p) => p.kind === 'clothes' && p.id === id)?.tintable;
   const defaultColor = (id: string | undefined) => manifest.proxies.find((p) => p.kind === 'clothes' && p.id === id)?.color;
@@ -134,14 +181,14 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
       value: (c) => c.detail[id] ?? 0, apply: (c, v) => withDetail(c, id, v),
     };
   };
-  const choice = (id: string, lbl: string, opts: ChoiceOption[], value: ChoiceControl['value'], apply: ChoiceControl['apply']): ChoiceControl =>
-    ({ kind: 'choice', id, label: label(id, lbl), options: opts, value, apply });
+  const choice = (id: string, lbl: string, opts: ChoiceOption[], value: ChoiceControl['value'], apply: ChoiceControl['apply'], display: ChoiceControl['display'] = 'image'): ChoiceControl =>
+    ({ kind: 'choice', id, label: label(id, lbl), display, options: opts, value, apply });
   const color = (id: string, lbl: string, colors: string[], value: ColorControl['value'], apply: ColorControl['apply']): ColorControl =>
     ({ kind: 'color', id, label: label(id, lbl), colors, value, apply });
   const none = (on: boolean): ChoiceOption[] => (on ? [{ id: null, label: label('none', 'None') }] : []);
   const worn = (c: HumanConfig, slot: WearSlot) => c.clothes.find((id) => clothingInfo(id).slot === slot);
   const clothingChoice = (slot: WearSlot, lbl: string, canBeEmpty: boolean) => choice('style', lbl,
-    [...none(canBeEmpty), ...allowed[slot].map((id) => ({ id, label: label(id, clothingInfo(id).label) }))],
+    [...none(canBeEmpty), ...allowed[slot].map((id) => ({ id, label: label(id, clothingInfo(id).label), preview: proxyPreview('clothes', id) }))],
     (c) => worn(c, slot) ?? null,
     (c, v) => ({ ...c, clothes: [...c.clothes.filter((id) => clothingInfo(id).slot !== slot && !(v && clothingInfo(id).slot === CONFLICTS[slot])), ...(v ? [v] : [])] }));
   /** Fabric color of the tintable garment in a slot (only shown when the slot offers one). */
@@ -152,23 +199,28 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
 
   const build: Record<SectionId, () => EditorControl[]> = {
     face: () => [
-      ...(['african', 'asian', 'caucasian'] as const).map((k) => macro(k, { african: 'African features', asian: 'Asian features', caucasian: 'European features' }[k])),
+      ...(options.featureSliders ? (['african', 'asian', 'caucasian'] as const).map((k) => macro(k, { african: 'African features', asian: 'Asian features', caucasian: 'European features' }[k])) : []),
       ...DETAIL_SLIDERS.filter((d) => d.group === 'head').map((d) => detail(d.id)),
     ],
     skin: () => [
-      choice('tone', 'Skin', allowed.skin.map((id) => ({ id, label: label(id, skinInfo(id, manifest.skins.find((s) => s.id === id)?.tags ?? []).label) })),
-        (c) => c.skin, (c, v) => ({ ...c, skin: v ?? c.skin })),
-      color('tint', 'Tint', tints, (c) => c.skinTint, (c, v) => ({ ...c, skinTint: v })),
+      choice('tone', 'Skin tone', tones.map((t) => ({ id: t.id, label: label(t.id, t.id.charAt(0).toUpperCase() + t.id.slice(1)), swatch: t.swatch })),
+        (c) => toneOf(c)?.id ?? null,
+        (c, v) => {
+          const t = tones.find((x) => x.id === v);
+          return t ? { ...c, skin: skinFor(skinIds, t.base, c.age, c.gender) ?? c.skin, skinTint: t.tint } : c;
+        }, 'swatch'),
     ],
     eyes: () => [
-      choice('color', 'Eye color', allowed.eyes.map((id) => ({ id, label: label(id, EYE_LABELS[id] ?? id), swatch: EYE_SWATCH[id] })),
-        (c) => c.eyes, (c, v) => ({ ...c, eyes: v ?? c.eyes })),
-      choice('lashes', 'Lashes', [...none(true), ...allowed.eyelashes.map((id, i) => ({ id, label: `${i + 1}` }))],
+      choice('color', 'Eye color', allowed.eyes.map((id) => ({
+        id, label: label(id, EYE_LABELS[id] ?? id),
+        swatch: manifest.eyeOptions?.[id]?.swatch ?? EYE_SWATCH[id], preview: url(manifest.eyeOptions?.[id]?.preview),
+      })), (c) => c.eyes, (c, v) => ({ ...c, eyes: v ?? c.eyes }), 'swatch'),
+      choice('lashes', 'Lashes', [...none(true), ...allowed.eyelashes.map((id, i) => ({ id, label: label(id, `Lashes ${i + 1}`), preview: proxyPreview('eyelashes', id) }))],
         (c) => c.eyelashes, (c, v) => ({ ...c, eyelashes: v })),
       ...DETAIL_SLIDERS.filter((d) => d.group === 'eyes' && !BROW_SLIDERS.includes(d.id)).map((d) => detail(d.id)),
     ],
     brows: () => [
-      choice('style', 'Brows', [...none(optional.eyebrows), ...allowed.eyebrows.map((id, i) => ({ id, label: `${i + 1}` }))],
+      choice('style', 'Brows', [...none(optional.eyebrows), ...allowed.eyebrows.map((id, i) => ({ id, label: label(id, `Brows ${i + 1}`), preview: proxyPreview('eyebrows', id) }))],
         (c) => c.eyebrows, (c, v) => ({ ...c, eyebrows: v })),
       color('color', 'Brow color', browColors, (c) => c.eyebrowColor, (c, v) => ({ ...c, eyebrowColor: v })),
       ...BROW_SLIDERS.map(detail),
@@ -177,7 +229,7 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
     mouth: () => DETAIL_SLIDERS.filter((d) => d.group === 'mouth').map((d) => detail(d.id)),
     ears: () => DETAIL_SLIDERS.filter((d) => d.group === 'ears').map((d) => detail(d.id)),
     hair: () => [
-      choice('style', 'Hairstyle', [...none(optional.hair), ...allowed.hair.map((id) => ({ id, label: label(id, hairInfo(id).label) }))],
+      choice('style', 'Hairstyle', [...none(optional.hair), ...allowed.hair.map((id) => ({ id, label: label(id, hairInfo(id).label), preview: proxyPreview('hair', id) }))],
         (c) => c.hair, (c, v) => ({ ...c, hair: v })),
       color('color', 'Hair color', hairColors, (c) => c.hairColor, (c, v) => ({ ...c, hairColor: v })),
     ],
@@ -211,7 +263,8 @@ export function createHumanEditor(manifest: HumanManifest, options: HumanEditorO
     const c: HumanConfig = { ...base, ...input, ...options.locked, detail: { ...base.detail, ...input?.detail, ...options.locked?.detail } } as HumanConfig;
     if (gender !== 'any') c.gender = options.locked?.gender ?? (gender === 'female' ? Math.min(c.gender, 0.3) : Math.max(c.gender, 0.7));
     for (const [k, v] of Object.entries(c.detail)) c.detail[k] = Math.max(-range, Math.min(range, v));
-    c.skin = pick(c.skin, allowed.skin, closestSkin(c.skin, allowed.skin, manifest) ?? base.skin) ?? c.skin;
+    // keep the chosen tone family, but follow the avatar's age and gender with the texture variant
+    c.skin = skinFor(allowed.skin, skinBase(c.skin), c.age, c.gender) ?? pick(c.skin, allowed.skin, closestSkin(c.skin, allowed.skin, manifest) ?? base.skin) ?? c.skin;
     c.eyes = pick(c.eyes, allowed.eyes, base.eyes) ?? c.eyes;
     c.hair = c.hair === null && optional.hair ? null : pick(c.hair, allowed.hair, base.hair);
     c.eyebrows = c.eyebrows === null && optional.eyebrows ? null : pick(c.eyebrows, allowed.eyebrows, base.eyebrows);
@@ -264,4 +317,60 @@ function closestSkin(id: string, allowed: string[], manifest: HumanManifest) {
     if (sc > score) { score = sc; best = a; }
   }
   return best;
+}
+
+// ---------------------------------------------------------------- catalog for custom UIs
+export interface CatalogOption {
+  /** Value to pass to `apply` (null = "none"). */
+  id: string | null;
+  /** Accessible name; not meant as visible text. */
+  label: string;
+  /** Hex color for round swatches (skin tones, eye colors, hair/brow/fabric colors). */
+  swatch?: string;
+  /** Absolute URL of a transparent WebP thumbnail (hair, brows, lashes, outfits, shoes, hats, headwear, eyes). */
+  preview?: string;
+}
+export interface CatalogAttribute {
+  /** e.g. 'hair.style', 'skin.tone', 'eyes.color', 'outfit.color' */
+  key: string;
+  section: SectionId;
+  label: string;
+  /** How to show the options: 'image' -> thumbnails, 'swatch' -> round color swatches. */
+  display: 'image' | 'swatch';
+  options: CatalogOption[];
+  /** The selected option id for a config. */
+  value(c: HumanConfig): string | null;
+  /** A new config with this option selected (already normalized). */
+  apply(c: HumanConfig, id: string | null): HumanConfig;
+}
+
+/**
+ * Every pickable (non-slider) attribute with its preview images or color swatches, for apps that
+ * build their own avatar UI. Respects the same options as the editor (gender lock, items, …).
+ *
+ *   const attrs = getHumanCatalog(pkg, { gender: 'female' });
+ *   attrs.find((a) => a.key === 'hair.style')!.options  // [{ id: 'long01', preview: 'https://…/previews/hair-long01.webp' }, …]
+ *   config = attr.apply(config, option.id);
+ */
+export function getHumanCatalog(source: HumanPackage | HumanManifest | HumanEditorModel, options?: HumanEditorOptions): CatalogAttribute[] {
+  const editor = 'sections' in source ? source : createHumanEditor(source, options);
+  const out: CatalogAttribute[] = [];
+  for (const s of editor.sections) {
+    for (const ctl of s.controls) {
+      if (ctl.kind === 'slider') continue;
+      const key = `${s.id}.${ctl.id}`;
+      if (ctl.kind === 'choice') {
+        out.push({
+          key, section: s.id, label: ctl.label, display: ctl.display, options: ctl.options,
+          value: ctl.value, apply: (c, id) => editor.normalize(ctl.apply(c, id)),
+        });
+      } else {
+        out.push({
+          key, section: s.id, label: ctl.label, display: 'swatch', options: ctl.colors.map((c) => ({ id: c, label: c, swatch: c })),
+          value: (c) => ctl.value(c), apply: (c, id) => (id ? editor.normalize(ctl.apply(c, id)) : c),
+        });
+      }
+    }
+  }
+  return out;
 }

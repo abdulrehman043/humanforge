@@ -63,6 +63,8 @@ export interface ProxyMeta {
   roughness?: number;
   /** Texture coordinates are in tiles (repeat wrapping). */
   tileable?: boolean;
+  /** Transparent WebP thumbnail, relative to the package root (tools/build-previews.mts). */
+  preview?: string;
 }
 export interface HumanManifest {
   vertexCount: number;
@@ -74,8 +76,11 @@ export interface HumanManifest {
   };
   bones: { name: string; parent: number; head: number[]; tail: number[] }[];
   proxies: ProxyMeta[];
-  skins: { id: string; tags: string[] }[];
+  /** `swatch`: the skin tone as rendered (hex), from tools/build-previews.mts. */
+  skins: { id: string; tags: string[]; swatch?: string }[];
   eyes: string[];
+  /** Iris color and round iris thumbnail per eye color (tools/build-previews.mts). */
+  eyeOptions?: Record<string, { swatch: string; preview: string }>;
   textureSizes: { skin1k: number; skin2k: number; eyes: number };
   expressions: Record<string, string>;
 }

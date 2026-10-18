@@ -1,7 +1,7 @@
 // Tests for the developer-controlled editor model (src/human/editor.ts).
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { createHumanEditor } from '../src/human/editor';
+import { createHumanEditor, getHumanCatalog } from '../src/human/editor';
 import { clothingInfo, hairInfo } from '../src/human/catalog';
 import type { HumanManifest } from '../src/human/runtime';
 
@@ -78,6 +78,32 @@ check(f.normalize({ ...look, clothes: [...look.clothes, 'fedora01'] }).clothes.f
 const meta = (id: string) => manifest.proxies.find((p) => p.kind === 'clothes' && p.id === id)!;
 check(meta('hijab01').hidesHair === true && (meta('hijab01').deleteVerts?.length ?? 0) > 0, 'hijab hides hair and scalp');
 check(['abaya01', 'gown01', 'dress_knee01'].every((id) => meta(id).tintable && (meta(id).deleteVerts?.length ?? 0) > 0), 'dresses tintable and hide the body underneath');
+
+// swatches and previews instead of text
+const pkgLike = { manifest, baseUrl: 'https://cdn.example.com/human/' } as any;
+const cat = getHumanCatalog(pkgLike, { gender: 'female' });
+const attr = (k: string) => cat.find((a) => a.key === k)!;
+check(!cat.some((a) => a.key === 'skin.tint') && !createHumanEditor(manifest).sections.some((s) => s.controls.some((c) => ['african', 'asian', 'caucasian'].includes(c.id))),
+  'no ethnicity sliders or tint list by default');
+check(createHumanEditor(manifest, { featureSliders: true }).sections.some((s) => s.controls.some((c) => c.id === 'african')), 'featureSliders opt-in');
+const tones = attr('skin.tone');
+check(tones.display === 'swatch' && tones.options.length >= 8 && tones.options.every((o) => /^#[0-9a-f]{6}$/.test(o.swatch ?? '')), `skin tones are swatches (${tones.options.length})`);
+const lum = (h: string) => 0.299 * parseInt(h.slice(1, 3), 16) + 0.587 * parseInt(h.slice(3, 5), 16) + 0.114 * parseInt(h.slice(5, 7), 16);
+check(tones.options.every((o, i, a) => i === 0 || lum(a[i - 1].swatch!) >= lum(o.swatch!)), 'skin tones ordered light to deep');
+let cfg = createHumanEditor(pkgLike, { gender: 'female' }).initial;
+const deep = tones.options[tones.options.length - 1].id;
+cfg = tones.apply(cfg, deep);
+check(cfg.skin.includes('african') && cfg.skin.includes('female') && tones.value(cfg) === deep, `deep tone -> ${cfg.skin} ${cfg.skinTint}`);
+const older = createHumanEditor(pkgLike, { gender: 'female' }).normalize({ ...cfg, age: 0.8 });
+check(older.skin.startsWith('old_african_female') && tones.value(older) === deep, `tone follows age -> ${older.skin}`);
+for (const k of ['hair.style', 'brows.style', 'eyes.lashes', 'outfit.style', 'shoes.style', 'headwear.style']) {
+  const a = attr(k);
+  check(!!a && a.display === 'image' && a.options.every((o) => o.id === null || o.preview?.startsWith('https://cdn.example.com/human/previews/')), `${k}: every option has a preview`);
+}
+const eyes = attr('eyes.color');
+check(eyes.display === 'swatch' && eyes.options.every((o) => o.swatch && o.preview), 'eye colors: swatch + iris preview');
+for (const k of ['hair.color', 'brows.color', 'outfit.color']) check(attr(k)?.options.every((o) => o.swatch), `${k}: swatches`);
+check(cat.every((a) => a.options.every((o) => existsSync(path.resolve('assets/human', (o.preview ?? '').replace('https://cdn.example.com/human/', '')) ) || !o.preview)), 'all preview files exist');
 
 console.log(fails ? `${fails} failures` : 'all editor checks passed');
 process.exit(fails ? 1 : 0);
