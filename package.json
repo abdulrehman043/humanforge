@@ -1,7 +1,7 @@
 {
   "name": "humanforge",
-  "version": "0.5.0",
-  "description": "Open-source avatar SDK for React and React Native: realistic MakeHuman-based humans (CC0) plus a tiny procedural low-poly mode.",
+  "version": "0.6.0",
+  "description": "Open-source avatar SDK for React and React Native: layered 2D cartoon avatars (no GL), realistic MakeHuman-based 3D humans (CC0) and a procedural low-poly mode.",
   "license": "MIT",
   "author": "abdulrehman043",
   "homepage": "https://github.com/abdulrehman043/humanforge#readme",
@@ -37,7 +37,8 @@
     "./human/export": "./src/human/export.ts",
     "./human/selfie": "./src/human/selfie.ts",
     "./web": "./src/web/index.ts",
-    "./native": "./src/native/index.ts"
+    "./native": "./src/native/index.ts",
+    "./cartoon": "./src/cartoon/index.ts"
   },
   "files": [
     "src",
@@ -50,10 +51,11 @@
     "build:human": "tsx tools/build-human.ts",
     "build:garments": "tsx tools/build-garments.mts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/smoke.ts && tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts && tsx scripts/editor-test.mts",
+    "test": "tsx scripts/smoke.ts && tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts && tsx scripts/editor-test.mts && tsx scripts/cartoon-test.mts",
     "build:facemap": "tsx tools/build-facemap.mts",
     "build:previews": "tsx tools/build-previews.mts",
-    "build:mobile": "tsx tools/build-mobile-textures.mts"
+    "build:mobile": "tsx tools/build-mobile-textures.mts",
+    "build:cartoon": "tsx tools/build-cartoon.mts"
   },
   "peerDependencies": {
     "@gltf-transform/core": ">=4",
@@ -64,7 +66,8 @@
     "expo-gl": ">=13",
     "react": ">=18",
     "react-native": ">=0.72",
-    "three": ">=0.160"
+    "three": ">=0.160",
+    "react-native-view-shot": ">=3"
   },
   "peerDependenciesMeta": {
     "expo-gl": {
@@ -90,6 +93,9 @@
     },
     "react-dom": {
       "optional": true
+    },
+    "react-native-view-shot": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -109,6 +115,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-native": "^0.81.6",
+    "react-native-view-shot": "^4.0.3",
+    "react-native-web": "^0.21.4",
     "sharp": "^0.35.5",
     "three": "^0.186.1",
     "tsx": "^4.23.15",

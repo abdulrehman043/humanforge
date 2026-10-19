@@ -1,7 +1,12 @@
 # HumanForge
 
-An open-source 3D avatar SDK for React and React Native, built as an open alternative to hosted
-avatar builders such as MetaPerson Creator. It has two modes:
+An open-source avatar SDK for React and React Native, built as an open alternative to hosted
+avatar builders such as MetaPerson Creator. It has three modes:
+
+- **Cartoon 2D** (`humanforge/cartoon`): layered PNG avatars for every device, including low-end
+  Androids. No GL. Five angles, sliders, modest wear. [Jump to it](#cartoon-2d-avatar).
+- **Realistic human** (`humanforge/human`): MakeHuman-based 3D, described below.
+- **Stylized low-poly** (`humanforge/core`): procedural 3D.
 
 | | **Realistic human** (`humanforge/human`) | **Stylized low-poly** (`humanforge/core`) |
 | --- | --- | --- |
@@ -12,6 +17,81 @@ avatar builders such as MetaPerson Creator. It has two modes:
 | Face animation | 34 FACS blendshapes with **ARKit names** (`jawOpen`, `mouthSmile`, `eyeBlinkLeft`, …) | none |
 | Download | ~1.4 MB one-time core + ~0.3–0.8 MB per look (gzipped, cached on device) | 0 (code only) |
 | Export | Compressed GLB (~3 MB with textures, sparse blendshapes) | GLB ~160 KB |
+
+## Cartoon 2D avatar
+
+A chibi-style, full-body cartoon avatar made of layered PNGs (the art is generated in code, so it
+is original and CC0). It is built for **every phone, high and low end**: no GL, no WebView, only
+`<Image>` and the native animation driver.
+
+![Cartoon avatar](demo/cartoon-preview.png)
+
+```bash
+npx expo install expo-file-system react-native-view-shot   # view-shot only for snapshots
+```
+
+```tsx
+import { CartoonEditor, CartoonView, useCartoonPackage, preloadCartoon } from 'humanforge/cartoon';
+
+const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.6.0/assets/cartoon';
+
+// editor screen
+const { pkg, ready } = useCartoonPackage(ASSETS, { config: saved, width: 260 });
+if (!pkg || !ready) return <Loading />;
+<CartoonEditor
+  pkg={pkg}
+  defaultValue={saved}
+  options={{ gender: 'female', modest: true }}      // abaya, jalabiya, maxi dress, hijab, al-amira
+  onSave={(config, pngUri) => api.saveAvatar(config)}
+/>
+
+// anywhere else (profile, chat, lists)
+<CartoonView pkg={pkg} config={saved} width={96} framing="bust" swipe={false} />
+```
+
+**What users can change:** 12 skin tones; 5 eye styles + 8 eye colours; 5 brow styles; 4 noses;
+5 mouths + lip colour; 14 hairstyles (14 hair colours); beards (5); glasses (2); headwear (hijab,
+al-amira, kufi, beanie); 8 tops, 5 bottoms, 4 one-piece outfits (abaya, jalabiya, maxi dress,
+dress), 4 shoes, all recolourable; 10 shape sliders (head size, face width, eye size and height,
+brow height, nose size, mouth width and height, build, height); female/male body.
+
+**Same pattern as `HumanEditor`:** the config is plain JSON (`CartoonConfig`); `createCartoonEditor(pkg, options)`
+gives the sections and controls as data; `getCartoonCatalog(pkg)` gives every option with its
+preview tile or colour swatch for custom UIs. Options: `gender`, `modest`, `sections`,
+`exclude` / `include`, `items`, `colors`, `optional`, `sliderRange`, `defaults`, `locked`, `labels`.
+
+### How it stays smooth
+
+| Requirement | How |
+| --- | --- |
+| No GL | Every part is a small trimmed PNG in an `<Image>`; colours use native `tintColor` (white masks + a separate shading layer). |
+| First frame after warm ≤ 300 ms | `useCartoonPackage` / `preloadCartoon` put all layers of the look on disk first; only the visible angle mounts at first (27–36 small images), the others mount right after the first frame; Android `fadeDuration` is 0. |
+| Slider drag without JS stalls | Slider values are `Animated.Value`s handed to the **native driver**; each part's transform is built from them, so a drag only sends numbers to the native side: no React render and no layout per move. The config updates once, on release. |
+| Hair/outfit swap keeps the old look | The new layer set mounts invisibly and replaces the old one only when every image has loaded (double buffering); nothing blanks. Colour changes reuse the mounted images. |
+| Angle swipe at 60 fps | 5 angles (front, ¾ and profile each side; left ones are mirrored right ones, so they share bitmaps). A paging `ScrollView` drives each angle's opacity through `Animated.event` on the native driver: zero JS per frame. |
+| Low memory / fill rate | Layers come in 1x and 2x; `cartoonDensity()` picks 1x unless the avatar is drawn > 760 px wide (GPU fill rate is what limits swiping on weak phones). A look is ~300 KB (1x) / ~650 KB (2x) to download and ~8 MB / ~32 MB decoded for all angles. Hidden angles are moved out of the clip area natively, so they cost no drawing. |
+
+### Acceptance on your devices
+
+`<CartoonBench pkg={pkg} />` is a ready-made test screen: it measures first frame after warm,
+JS frame times while sliders move every frame, swap commit time and the angle swipe, and shows
+PASS/FAIL (and can share the JSON). The UI thread's frame rate can't be measured from JS: watch
+the Perf Monitor (dev menu) on iOS and run `scripts/android-jank.sh <your.package>` on Android
+while swiping and dragging (target: < 5% janky frames).
+
+**Status (0.6.0):**
+- Verified in a browser through react-native-web: layout, tinting, sliders without React
+  re-renders, swaps that keep the old look on a simulated slow network, and the angle swipe.
+- Ran natively in Expo Go on an Android 14 emulator (host GPU, debug JS):
+  - first frame after warm: 66–101 ms
+  - slider drag: 0.06–0.13 ms of JS per update, JS p95 19–24 ms
+  - hair/outfit swap: 93–195 ms, with the old look held
+- Emulator frame times are dominated by its GL translation overhead. Even a plain list scroll
+  there is 6–12% janky; the angle swipe at 1x was 12–15%.
+- **Not yet measured on real phones.** Accept it only after `CartoonBench` and
+  `android-jank.sh` pass on your weak Android and a mid iPhone.
+
+To rebuild or extend the art: `npm run build:cartoon` (sources in `tools/cartoon/`).
 
 ## Realistic human
 
