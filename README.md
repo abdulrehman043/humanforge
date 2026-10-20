@@ -69,7 +69,7 @@ clothes and the hijab all recolour; the face and body sliders work as with the c
 ![Stylized cartoon pack](demo/cartoon-g3d-preview.png)
 
 ```tsx
-const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@cartoon-g3d-v0.7.0/assets/cartoon-g3d';
+const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@cartoon-g3d-v0.7.1/assets/cartoon-g3d';
 const { pkg, ready } = useCartoonPackage(ASSETS, { config: saved, width: 260 });
 // modest: createCartoonEditor(pkg, { gender: 'female', modest: true }) -> abaya + hijab by default
 ```
