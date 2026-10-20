@@ -9,7 +9,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import {
-  CartoonConfig, CartoonSliderId, CartoonView as ViewDef, DEFAULT_CARTOON, ResolvedLayer, TransformGroup, cartoonItemKey, cartoonLayers,
+  CartoonBuild, CartoonConfig, CartoonPivots, CartoonSliderId, CartoonView as ViewDef, DEFAULT_CARTOON, ResolvedLayer, TransformGroup, cartoonItemKey, cartoonLayers, cartoonPivots,
   groupSteps, layerMatrix,
 } from './model';
 import type { CartoonPackage } from './package';
@@ -62,6 +62,7 @@ export function makeNativeValues(values: Record<string, Animated.Value>) {
   }
 }
 
+// crops for the built-in chibi art; a manifest can override them (commissioned art has other proportions)
 const FRAMES: Record<CartoonFraming, { x: number; y: number; w: number; h: number }> = {
   full: { x: 0, y: 0, w: 400, h: 640 },
   bust: { x: 40, y: 20, w: 320, h: 360 },
@@ -75,7 +76,7 @@ export const CartoonView = forwardRef<CartoonViewHandle, CartoonViewProps>(funct
   const m = pkg.manifest;
   const c = useMemo(() => ({ ...DEFAULT_CARTOON, ...config, shape: { ...config.shape } }) as CartoonConfig, [JSON.stringify(config)]);
   const views = useMemo(() => (angles === 3 ? m.views.filter((v) => v.id !== 'side_l' && v.id !== 'side_r') : m.views), [m, angles]);
-  const frame = FRAMES[framing];
+  const frame = m.frames?.[framing] ?? (framing === 'full' ? { x: 0, y: 0, w: m.canvas.w, h: m.canvas.h } : FRAMES[framing]);
   const k = width / frame.w; // points per canvas unit
   const height = Math.round(frame.h * k);
   const startIndex = Math.max(0, views.findIndex((v) => v.id === view));
@@ -197,9 +198,9 @@ function ViewStack({ pkg, config, view, k, frame, values, onReady, onCommit }: S
   const itemKey = cartoonItemKey(m, config);
   const layers = cartoonLayers(m, config, view.src);
   // the set on screen; a new item set is mounted invisibly until all of its images have loaded
-  const [shown, setShown] = useState<{ key: string; layers: ResolvedLayer[] } | null>(null);
+  const [shown, setShown] = useState<{ key: string; layers: ResolvedLayer[]; build: CartoonBuild } | null>(null);
   const counted = useRef<{ key: string; n: number }>({ key: '', n: 0 });
-  const commit = (key: string) => setShown((cur) => (cur?.key === key ? cur : { key, layers: cartoonLayers(m, configRef.current, view.src) }));
+  const commit = (key: string) => setShown((cur) => (cur?.key === key ? cur : { key, layers: cartoonLayers(m, configRef.current, view.src), build: configRef.current.build }));
   const configRef = useRef(config);
   configRef.current = config;
   const onLoad = (key: string, total: number) => () => {
@@ -219,14 +220,14 @@ function ViewStack({ pkg, config, view, k, frame, values, onReady, onCommit }: S
 
   // Buffers keyed by item set: React keeps the incoming buffer's views when it becomes visible
   // (only its opacity flips), so committing a swap never remounts or reloads images.
-  const buffers: { key: string; layers: ResolvedLayer[]; visible: boolean }[] = [];
-  if (shown && shown.key !== itemKey) buffers.push({ key: shown.key, layers: shown.layers, visible: true });
-  buffers.push({ key: itemKey, layers, visible: shown?.key === itemKey });
+  const buffers: { key: string; layers: ResolvedLayer[]; build: CartoonBuild; visible: boolean }[] = [];
+  if (shown && shown.key !== itemKey) buffers.push({ key: shown.key, layers: shown.layers, build: shown.build, visible: true });
+  buffers.push({ key: itemKey, layers, build: config.build, visible: shown?.key === itemKey });
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {buffers.map((b) => (
         <View key={b.key} style={[StyleSheet.absoluteFill, { opacity: b.visible ? 1 : 0 }]}>
-          <Layers layers={b.layers} pkg={pkg} view={view} k={k} frame={frame} values={values} onLoad={b.visible ? undefined : onLoad(b.key, b.layers.length)} />
+          <Layers layers={b.layers} build={b.build} pkg={pkg} view={view} k={k} frame={frame} values={values} onLoad={b.visible ? undefined : onLoad(b.key, b.layers.length)} />
         </View>
       ))}
     </View>
@@ -234,19 +235,19 @@ function ViewStack({ pkg, config, view, k, frame, values, onReady, onCommit }: S
 }
 
 /** Consecutive layers with the same transform groups share one animated wrapper. */
-function Layers({ layers, pkg, view, k, frame, values, onLoad }: { layers: ResolvedLayer[]; pkg: CartoonPackage; view: ViewDef; k: number; frame: { x: number; y: number }; values: Record<CartoonSliderId, Animated.Value>; onLoad?: () => void }) {
-  const pivots = pkg.manifest.pivots[view.src];
+function Layers({ layers, build, pkg, view, k, frame, values, onLoad }: { layers: ResolvedLayer[]; build: CartoonBuild; pkg: CartoonPackage; view: ViewDef; k: number; frame: { x: number; y: number }; values: Record<CartoonSliderId, Animated.Value>; onLoad?: () => void }) {
+  const pivots = cartoonPivots(pkg.manifest, build, view.src);
   const runs: { groups: TransformGroup[]; items: ResolvedLayer[] }[] = [];
   for (const l of layers) {
     const last = runs[runs.length - 1];
     if (last && last.groups.join() === l.groups.join()) last.items.push(l);
     else runs.push({ groups: l.groups, items: [l] });
   }
-  const W = 400 * k, H = 640 * k;
+  const W = pkg.manifest.canvas.w * k, H = pkg.manifest.canvas.h * k;
   return (
     <>
       {runs.map((run, i) => (
-        <Wrapper key={`${i}:${run.groups.join()}`} groups={run.groups} pivots={pivots} values={values} k={k}
+        <Wrapper key={`${i}:${run.groups.join()}`} groups={run.groups} pivots={pivots} values={values} k={k} center={[W / 2, H / 2]}
           style={{ position: 'absolute', left: -frame.x * k, top: -frame.y * k, width: W, height: H }}>
           {run.items.map((l) => (
             <Image
@@ -272,12 +273,12 @@ function Layers({ layers, pkg, view, k, frame, values, onLoad }: { layers: Resol
  * Native: Animated.View whose transform runs on the native driver. Web (no native driver): a plain
  * View whose CSS matrix is set directly from value listeners, so slider moves never re-render React.
  */
-function Wrapper({ groups, pivots, values, k, style, children }: { groups: TransformGroup[]; pivots: Record<string, [number, number]>; values: Record<CartoonSliderId, Animated.Value>; k: number; style: ViewStyle; children: React.ReactNode }) {
+function Wrapper({ groups, pivots, values, k, center, style, children }: { groups: TransformGroup[]; pivots: CartoonPivots; values: Record<CartoonSliderId, Animated.Value>; k: number; center: [number, number]; style: ViewStyle; children: React.ReactNode }) {
   const node = useRef<any>(null);
   const web = Platform.OS === 'web';
   useEffect(() => {
     if (!web || !groups.length) return;
-    const steps = groups.flatMap((g) => groupSteps(g, pivots as any));
+    const steps = groups.flatMap((g) => groupSteps(g, pivots));
     const sliders = [...new Set(steps.map((st) => st.slider))];
     const apply = () => {
       const shape = Object.fromEntries(sliders.map((id) => [id, (values[id] as any).__getValue()]));
@@ -290,7 +291,7 @@ function Wrapper({ groups, pivots, values, k, style, children }: { groups: Trans
     return () => subs.forEach(([id, sub]) => values[id].removeListener(sub));
   }, [groups.join(), pivots, values, k]);
   if (web) return <View ref={node} style={style}>{children}</View>;
-  return <Animated.View style={[style, { transform: animatedTransform(groups, pivots, values, k) }]}>{children}</Animated.View>;
+  return <Animated.View style={[style, { transform: animatedTransform(groups, pivots, values, k, center) }]}>{children}</Animated.View>;
 }
 
 /**
@@ -298,16 +299,16 @@ function Wrapper({ groups, pivots, values, k, style, children }: { groups: Trans
  * the view center, so pivots are expressed relative to it) or translates.
  */
 const transformCache = new WeakMap<object, Map<string, any[]>>();
-function animatedTransform(groups: TransformGroup[], pivots: Record<string, [number, number]>, values: Record<CartoonSliderId, Animated.Value>, k: number) {
+function animatedTransform(groups: TransformGroup[], pivots: CartoonPivots, values: Record<CartoonSliderId, Animated.Value>, k: number, center: [number, number]) {
   let cache = transformCache.get(values);
   if (!cache) { cache = new Map(); transformCache.set(values, cache); }
-  const key = `${groups.join()}|${k}|${JSON.stringify(pivots)}`;
+  const key = `${groups.join()}|${k}|${center.join()}|${JSON.stringify(pivots)}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const cx = 200 * k, cy = 320 * k; // wrapper center in points
+  const [cx, cy] = center; // wrapper center in points
   const out: any[] = [];
   for (const g of groups) {
-    for (const st of groupSteps(g, pivots as any)) {
+    for (const st of groupSteps(g, pivots)) {
       const v = values[st.slider];
       if (st.op === 'translateY') { out.push({ translateY: Animated.multiply(v, st.gain * k) }); continue; }
       const s = Animated.add(1, Animated.multiply(v, st.gain));

@@ -1,5 +1,6 @@
 // Cartoon avatar harness (react-native-web): the same <CartoonEditor> the Expo app uses.
-//   npx vite --config vite.rnw.config.ts   ->  /cartoon.html  (?modest=1&gender=female)
+//   npx vite --config vite.rnw.config.ts   ->  /cartoon.html  (?modest=1&gender=female, ?pkg=cartoon-g3d or ?url=<package URL>)
+//   ?pkg=cartoon-kit loads another package from assets/ (npm run demo:kit imports the fake art kit there)
 import React, { useEffect, useState } from 'react';
 import { AppRegistry, Text, View } from 'react-native';
 import { CartoonEditor } from '../src/cartoon/CartoonEditor';
@@ -10,7 +11,7 @@ const qp = new URLSearchParams(location.search);
 function App() {
   const [pkg, setPkg] = useState<CartoonPackage | null>(null);
   useEffect(() => {
-    loadCartoonPackage('/cartoon', { density: Number(qp.get('density') || 2) }).then((p) => {
+    loadCartoonPackage(qp.get('url') || `/${qp.get('pkg') || 'cartoon'}`, { density: Number(qp.get('density') || 2) }).then((p) => {
       // ?slow: every layer takes 1.5 s to arrive (network simulation)
       if (qp.has('slow')) { const uri = p.uri; p.uri = (f) => `${uri(f)}?slow=1`; }
       (window as any).__pkg = p;

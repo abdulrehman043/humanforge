@@ -4,3 +4,10 @@ dist
 
 # mobile texture pack is published on its own tag (mobile-v*), see README
 assets/human/mobile/
+
+# local art kits and packages imported from them (npm run demo:kit)
+.local/
+assets/cartoon-kit/
+
+# stylized cartoon pack is published on its own tag (cartoon-g3d-v*), see README
+assets/cartoon-g3d/

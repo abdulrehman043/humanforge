@@ -1,6 +1,6 @@
 {
   "name": "humanforge",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Open-source avatar SDK for React and React Native: layered 2D cartoon avatars (no GL), realistic MakeHuman-based 3D humans (CC0) and a procedural low-poly mode.",
   "license": "MIT",
   "author": "abdulrehman043",
@@ -51,11 +51,16 @@
     "build:human": "tsx tools/build-human.ts",
     "build:garments": "tsx tools/build-garments.mts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/smoke.ts && tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts && tsx scripts/editor-test.mts && tsx scripts/cartoon-test.mts",
+    "test": "tsx scripts/smoke.ts && tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts && tsx scripts/editor-test.mts && tsx scripts/cartoon-test.mts && tsx scripts/cartoon-import-test.mts",
     "build:facemap": "tsx tools/build-facemap.mts",
     "build:previews": "tsx tools/build-previews.mts",
     "build:mobile": "tsx tools/build-mobile-textures.mts",
-    "build:cartoon": "tsx tools/build-cartoon.mts"
+    "build:cartoon": "tsx tools/build-cartoon.mts",
+    "import:cartoon": "tsx tools/import-cartoon-art.mts",
+    "demo:cartoon": "vite --config vite.rnw.config.ts",
+    "demo:kit": "tsx tools/cartoon/make-test-kit.mts .local/test-kit && tsx tools/import-cartoon-art.mts .local/test-kit --out assets/cartoon-kit",
+    "g3d:fetch": "mkdir -p .local/g3d && for n in woman man; do curl -fsSL -o .local/g3d/$n-rigged.glb https://grab3d.com/dl/$n-rigged/$n-rigged.glb; done",
+    "build:cartoon-g3d": "tsx tools/cartoon-g3d/kit.mts render && tsx tools/cartoon-g3d/kit.mts compose && tsx tools/import-cartoon-art.mts .local/kit-g3d --out assets/cartoon-g3d"
   },
   "peerDependencies": {
     "@gltf-transform/core": ">=4",

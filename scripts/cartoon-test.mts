@@ -31,7 +31,7 @@ for (const b of m.builds) {
       ...m.items.hair.map((h) => `hair.${h.id}.front`),
       ...m.items.headwear.filter((h) => fit(h.fit)).map((h) => `headwear.${h.id}.${b}`),
       ...(['top', 'bottom', 'outfit', 'shoes'] as const).flatMap((slot) => m.items[slot].filter((i) => fit(i.fit)).map((i) => [`${slot}.${i.id}.${b}.mid`, `${slot}.${i.id}.${b}.front`, `${slot}.${i.id}.${b}.back`])).filter((alts) => !alts.some((k) => lib[k])).map((a) => a[0]),
-      'head', `body.${b}.mid`, ...m.items.eyes.map((e) => `eyes.${e.id}`), ...m.items.mouth.map((e) => `mouth.${e.id}`),
+      lib[`head.${b}`] ? `head.${b}` : 'head', `body.${b}.mid`, ...m.items.eyes.map((e) => `eyes.${e.id}`), ...m.items.mouth.map((e) => `mouth.${e.id}`),
     ];
     const absent = need.filter((k) => !lib[k]);
     check(absent.length === 0, `${b} / ${s}: all parts present${absent.length ? ' (missing ' + absent.slice(0, 5).join(', ') + ')' : ''}`);

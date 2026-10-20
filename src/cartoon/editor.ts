@@ -168,7 +168,8 @@ export function createCartoonEditor(source: CartoonPackage | CartoonManifest, op
     if (want === null && canBeEmpty) return null;
     if (want && ok.includes(want)) return want;
     if (fallback && ok.includes(fallback)) return fallback;
-    return canBeEmpty ? null : ok[0] ?? null;
+    // a default the package doesn't have (e.g. commissioned art with other styles): use its first item
+    return canBeEmpty && !fallback ? null : ok[0] ?? null;
   };
   function normalize(input?: Partial<CartoonConfig> | null): CartoonConfig {
     const c = { ...base, ...input, ...options.locked, shape: { ...base.shape, ...input?.shape, ...options.locked?.shape } } as CartoonConfig;

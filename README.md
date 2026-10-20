@@ -60,6 +60,26 @@ gives the sections and controls as data; `getCartoonCatalog(pkg)` gives every op
 preview tile or colour swatch for custom UIs. Options: `gender`, `modest`, `sections`,
 `exclude` / `include`, `items`, `colors`, `optional`, `sliderRange`, `defaults`, `locked`, `labels`.
 
+### Stylized pack (Bitmoji-like, `cartoon-g3d`)
+
+A second art set for the same `CartoonView`: soft 3D-cartoon people (woman and man) with a fitted
+hijab, abaya, jalabiya and casual outfits, at 3 angles (5 views). Hair, skin, eyes, brows, lips,
+clothes and the hijab all recolour; the face and body sliders work as with the chibi art.
+
+![Stylized cartoon pack](demo/cartoon-g3d-preview.png)
+
+```tsx
+const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@cartoon-g3d-v0.7.0/assets/cartoon-g3d';
+const { pkg, ready } = useCartoonPackage(ASSETS, { config: saved, width: 260 });
+// modest: createCartoonEditor(pkg, { gender: 'female', modest: true }) -> abaya + hijab by default
+```
+
+It is ~5 MB (186 layers at 1x/2x) and lives on its own git tag, like the mobile texture pack.
+Rebuild it with `npm run g3d:fetch && npm run build:cartoon-g3d` (needs Chrome; ~7 min): the
+characters are rendered in three.js with our CC0 modest wear fitted on, then split into tint and
+shading layers by part (`tools/cartoon-g3d/`). Per-build registration (`buildPivots`) keeps the
+sliders anchored on the taller male head.
+
 ### How it stays smooth
 
 | Requirement | How |
@@ -92,6 +112,121 @@ while swiping and dragging (target: < 5% janky frames).
   `android-jank.sh` pass on your weak Android and a mid iPhone.
 
 To rebuild or extend the art: `npm run build:cartoon` (sources in `tools/cartoon/`).
+
+### Using commissioned art
+
+The built-in art is generated chibi art. To ship an illustrator's art kit instead, import it into the
+same package format; `CartoonView`, `CartoonEditor` and the cache don't change.
+
+**What the artist delivers**
+
+- Full-canvas **800×1280** PNGs with a transparent background, in `front/`, `three/` (¾, facing
+  right) and `side/` (profile, facing right). The app mirrors them for the left-facing views.
+- One file per sub-layer: `<part key>.<n>.<kind>.png`. Sub-layers paint by `n`; within one `n`
+  the order is `under`, `tint`, `detail`.
+  - `tint`: a pure white mask. The app colours it (skin, hair, fabric…).
+  - `detail`: shading, lines and highlights, drawn as-is over the tint.
+  - `under`: drawn as-is beneath the tint, e.g. an ink outline.
+- Part keys:
+
+  | Part | Key |
+  | --- | --- |
+  | Body (per build, three depth bands) | `body.<female\|male>.<back\|mid\|front>` |
+  | Head (per build) | `head.<female\|male>` |
+  | Ears | `ears.<back\|front>` |
+  | Face parts | `eyes.<style>`, `brows.<style>`, `nose.<style>`, `mouth.<style>`, `facial_hair.<style>`, `glasses.<style>` |
+  | Hair | `hair.<style>.<back\|front>` |
+  | Headwear | `headwear.<style>.<female\|male>` |
+  | Clothes | `<top\|bottom\|outfit\|shoes>.<style>.<female\|male>.<back\|mid\|front>` |
+
+  Styles are lowercase `a-z0-9_`. `glasses` has no colour slot, so it uses `detail` (and `under`) only.
+- A **registration sheet** with these points per angle: neck base, head centre, both eye centres,
+  nose tip and mouth centre.
+
+**What you add next to the kit**
+
+`pivots.json`: copy the points from the registration sheet, in art pixels.
+
+```json
+{
+  "front": { "neck": [400, 492], "head": [400, 308], "eyes": [[360, 329], [440, 329]], "nose": [400, 377], "mouth": [400, 418] },
+  "three": { "neck": [412, 492], "head": [420, 308], "eyes": [[392, 329], [468, 330]], "nose": [478, 377], "mouth": [452, 418] },
+  "side":  { "neck": [430, 492], "head": [440, 308], "eyes": [520, 329], "nose": [568, 377], "mouth": [540, 418] }
+}
+```
+
+The sliders scale and move parts about these points. Head size grows from the neck, face width
+from the head centre, eye size from the eyes, and so on. With the chibi art these points were
+hard-coded; adult proportions need the real ones. Also:
+- `feet` is optional. The importer uses the lowest body or shoe pixel.
+- `brows` is optional and defaults to a little above the eyes.
+- Add `"units": "canvas"` to give the points in 400×640 units instead of pixels.
+- Add `"frames": { "head": {x,y,w,h}, "bust": {…} }` to override the `framing="head"|"bust"`
+  crops. By default they come from the head and neck points.
+
+`items.json`: item metadata you maintain. Every key is optional.
+
+```json
+{
+  "hair":        { "long_wavy": { "fit": "female", "coversEars": true } },
+  "facial_hair": { "beard": { "fit": "male" } },
+  "headwear":    { "hijab": { "fit": "female", "hidesHair": true, "modest": true, "color": "#3b4a6b" } },
+  "outfit":      { "abaya": { "modest": true, "color": "#1f1f24" } },
+  "top":         { "tshirt": { "color": "#3f7fd6" } }
+}
+```
+
+- `fit` defaults to the builds the art was drawn for (both builds = `unisex`); beards default to `male`.
+- `modest` decides what `options.modest` offers.
+- `color` is the default colour when the item is picked. Headwear and clothes without one get a warning.
+- Items are listed in `items.json` order, then the rest alphabetically.
+
+**Import**
+
+```bash
+npm run import:cartoon -- path/to/kit --check
+```
+
+```bash
+npm run import:cartoon -- path/to/kit --out assets/cartoon
+```
+
+`--check` only validates. Without it, the importer validates everything first and writes nothing
+if anything is wrong. It checks:
+- the canvas size and the transparent background
+- that `tint` layers are pure white
+- file names and part keys
+- that every item has art at every angle for each build it fits, and that each build has a head and a body
+- the pivots and `items.json` values
+
+Then it:
+- trims each layer and writes 1x (400×640 units) and 2x (the art's own resolution) PNGs
+- writes `manifest.json`, with `facial_hair` stored as the `facialHair` slot
+- renders a preview tile per item and the editor's section icons from the imported layers
+- clears only `1x/`, `2x/`, `previews/`, `icons/` and `manifest.json` in `--out`
+
+`--pivots` and `--items` point to files outside the kit folder.
+
+Runtime support for this kit format:
+- `head.<build>` keys
+- `under` layers
+- `facial_hair.*` keys
+- neck, head and feet pivots and framings read from the manifest
+
+Packages without them (the built-in art) still use the old `PIVOTS` constants.
+
+**Try it without real art:** `npx tsx tools/cartoon/make-test-kit.mts /tmp/kit` writes a fake kit
+made from the built-in art. It is recoloured, moved up, renamed to the artist's scheme, and has a
+per-build head, an `under` outline and `facial_hair`. It comes with `pivots.json` and `items.json`.
+Import it with `npm run import:cartoon -- /tmp/kit --out /tmp/pkg`.
+
+**See it in the editor locally:**
+1. `npm run demo:kit` makes the fake kit in `.local/test-kit` and imports it to `assets/cartoon-kit` (both gitignored).
+2. `npm run demo:cartoon` starts the react-native-web harness.
+3. Open `/cartoon.html?pkg=cartoon-kit` (add `&gender=male` or `&modest=1`).
+
+For real art, import it with `--out assets/cartoon-kit` and open the same URL.
+`scripts/cartoon-import-test.mts` (part of `npm test`) does the same with broken kits.
 
 ## Realistic human
 
@@ -487,4 +622,7 @@ npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
 - Selfie fitting: MediaPipe Face Landmarker and its canonical face mesh are Apache-2.0 (Google).
   `src/human/faceMap.ts` contains vertex indices and averaged landmark positions derived from them.
   The model and WASM are downloaded at runtime and aren't bundled.
+- Stylized cartoon pack (`cartoon-g3d`): rendered from the Grab3d "Casual Woman" and "Casual Man"
+  rigged characters ([grab3d.com](https://grab3d.com/models/characters/), CC0 1.0), dressed in the
+  CC0 MakeHuman abaya/jalabiya and our generated hijab; the layers are CC0 1.0.
 - No code, meshes or textures from Avatar SDK / MetaPerson or any other proprietary product.

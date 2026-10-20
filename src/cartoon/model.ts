@@ -45,7 +45,8 @@ export const DEFAULT_CARTOON: CartoonConfig = {
 export interface CartoonLayerFile {
   /** file name relative to <baseUrl>/<density>/ */
   f: string;
-  kind: 'tint' | 'detail';
+  /** tint: white mask coloured by `slot`; detail: drawn as-is over it; under: drawn as-is beneath it */
+  kind: 'tint' | 'detail' | 'under';
   slot?: ColorSlot;
   /** placement in canvas units */
   x: number; y: number; w: number; h: number;
@@ -60,6 +61,12 @@ export interface CartoonView {
   mirror: boolean;
   yaw: number;
 }
+/** Transform pivots of one art source (canvas units). neck / head / feet fall back to PIVOTS. */
+export interface CartoonPivots {
+  eyes: [number, number]; nose: [number, number]; mouth: [number, number]; brows: [number, number];
+  neck?: [number, number]; head?: [number, number]; feet?: [number, number];
+}
+export interface CartoonRect { x: number; y: number; w: number; h: number }
 export interface CartoonManifest {
   format: 'humanforge-cartoon';
   version: number;
@@ -69,11 +76,15 @@ export interface CartoonManifest {
   /** layers[src][key] = sub-layers in paint order */
   layers: Record<string, Record<string, CartoonLayerFile[]>>;
   /** transform pivots per art source (canvas units) */
-  pivots: Record<string, Record<'eyes' | 'nose' | 'mouth' | 'brows', [number, number]>>;
+  pivots: Record<string, CartoonPivots>;
+  /** per-build overrides of `pivots` (art drawn for builds of different height or proportions) */
+  buildPivots?: Partial<Record<CartoonBuild, Record<string, CartoonPivots>>>;
   items: Record<CartoonItemSlot, CartoonItem[]>;
   builds: CartoonBuild[];
   /** tab icons per editor section (relative paths) */
   icons?: Record<string, string>;
+  /** crop rects (canvas units) for CartoonView framings; defaults suit the built-in chibi art */
+  frames?: Partial<Record<'full' | 'bust' | 'head', CartoonRect>>;
 }
 
 // ---------------------------------------------------------------- sliders
@@ -100,7 +111,10 @@ export const SLIDER_GAIN = {
   mouthWidth: 0.25, mouthHeight: -6, bodyWidth: 0.14, height: 0.1,
 } as const;
 
-/** Fixed pivots (canvas units). Feature pivots come from the manifest per view. */
+/** Transform pivots for a build at one art source. */
+export const cartoonPivots = (m: CartoonManifest, build: CartoonBuild, src: string): CartoonPivots => m.buildPivots?.[build]?.[src] ?? m.pivots[src];
+
+/** Fallback body pivots (canvas units) for manifests without neck / head / feet pivots (the chibi art). */
 export const PIVOTS = { neck: [200, 262] as [number, number], head: [200, 170] as [number, number], feet: [200, 610] as [number, number] };
 
 /**
@@ -111,17 +125,18 @@ export type TransformStep =
   | { op: 'translateY'; slider: CartoonSliderId; gain: number }
   | { op: 'scale' | 'scaleX' | 'scaleY'; slider: CartoonSliderId; gain: number; pivot: [number, number] };
 
-export function groupSteps(group: TransformGroup, pivots: CartoonManifest['pivots'][string]): TransformStep[] {
+export function groupSteps(group: TransformGroup, pivots: CartoonPivots): TransformStep[] {
+  const P = { neck: pivots.neck ?? PIVOTS.neck, head: pivots.head ?? PIVOTS.head, feet: pivots.feet ?? PIVOTS.feet };
   switch (group) {
     case 'body': return [
-      { op: 'scaleX', slider: 'bodyWidth', gain: SLIDER_GAIN.bodyWidth, pivot: PIVOTS.feet },
-      { op: 'scaleY', slider: 'height', gain: SLIDER_GAIN.height, pivot: PIVOTS.feet },
+      { op: 'scaleX', slider: 'bodyWidth', gain: SLIDER_GAIN.bodyWidth, pivot: P.feet },
+      { op: 'scaleY', slider: 'height', gain: SLIDER_GAIN.height, pivot: P.feet },
     ];
     case 'head': return [
       // the head rides on top of the body: taller body -> head moves up by the stretched body height
-      { op: 'translateY', slider: 'height', gain: -SLIDER_GAIN.height * (PIVOTS.feet[1] - PIVOTS.neck[1]) },
-      { op: 'scale', slider: 'headSize', gain: SLIDER_GAIN.headSize, pivot: PIVOTS.neck },
-      { op: 'scaleX', slider: 'faceWidth', gain: SLIDER_GAIN.faceWidth, pivot: PIVOTS.head },
+      { op: 'translateY', slider: 'height', gain: -SLIDER_GAIN.height * (P.feet[1] - P.neck[1]) },
+      { op: 'scale', slider: 'headSize', gain: SLIDER_GAIN.headSize, pivot: P.neck },
+      { op: 'scaleX', slider: 'faceWidth', gain: SLIDER_GAIN.faceWidth, pivot: P.head },
     ];
     case 'eyes': return [
       { op: 'translateY', slider: 'eyeHeight', gain: SLIDER_GAIN.eyeHeight },
@@ -150,6 +165,10 @@ export interface ResolvedLayer {
   color?: string;
 }
 
+/** Layer key aliases: commissioned art names the beard slot facial_hair. */
+const keyAlias = (key: string) => (key.startsWith('facialHair.') ? `facial_hair.${key.slice(11)}` : undefined);
+const hasKey = (m: CartoonManifest, key: string) => Object.values(m.layers).some((lib) => !!lib[key]);
+
 const itemOf = (m: CartoonManifest, slot: CartoonItemSlot, id: string | null | undefined) => (id ? m.items[slot]?.find((i) => i.id === id) : undefined);
 
 /** Item keys of a config in paint order, with their transform groups (no colors). */
@@ -170,16 +189,19 @@ export function cartoonParts(m: CartoonManifest, c: CartoonConfig): { role: stri
     push(`body.${band}`, `body.${b}.${band}`, B);
     for (const [slot, id] of wear) push(`${slot}.${band}`, id ? `${slot}.${id}.${b}.${band}` : null, B);
   }
-  if (!hw?.hidesHair) push('ears.back', 'ears.back', H);
-  push('head', 'head', H);
-  if (!hw?.hidesHair && !earsOnTop) push('ears.front', 'ears.front', H);
+  // ears may be drawn per build (ears.female.front) or shared (ears.front)
+  const ear = (band: 'back' | 'front') => (hasKey(m, `ears.${b}.${band}`) ? `ears.${b}.${band}` : `ears.${band}`);
+  if (!hw?.hidesHair) push('ears.back', ear('back'), H);
+  // commissioned art draws a head per build (head.female / head.male); the chibi art shares one
+  push('head', hasKey(m, `head.${b}`) ? `head.${b}` : 'head', H);
+  if (!hw?.hidesHair && !earsOnTop) push('ears.front', ear('front'), H);
   push('nose', `nose.${c.nose}`, [...H, 'nose']);
   push('mouth', `mouth.${c.mouth}`, [...H, 'mouth']);
   push('facialHair', c.facialHair ? `facialHair.${c.facialHair}` : null, H);
   push('eyes', `eyes.${c.eyes}`, [...H, 'eyes']);
   push('brows', `brows.${c.brows}`, [...H, 'brows']);
   push('hairFront', hairItem ? `hair.${hairItem.id}.front` : null, H);
-  if (earsOnTop) push('ears.front', 'ears.front', H);
+  if (earsOnTop) push('ears.front', ear('front'), H);
   push('glasses', c.glasses ? `glasses.${c.glasses}` : null, [...H, 'eyes']);
   push('headwear', hw ? `headwear.${hw.id}.${b}` : null, H);
   return out;
@@ -197,7 +219,8 @@ export function cartoonLayers(m: CartoonManifest, c: CartoonConfig, src: string)
   const lib = m.layers[src] ?? {};
   const out: ResolvedLayer[] = [];
   for (const p of cartoonParts(m, c)) {
-    (lib[p.key] ?? []).forEach((file, i) => {
+    const alias = keyAlias(p.key);
+    (lib[p.key] ?? (alias && lib[alias]) ?? []).forEach((file, i) => {
       out.push({ role: `${p.role}.${i}`, key: p.key, file, groups: p.groups, color: file.kind === 'tint' && file.slot ? slotColor(file.slot, c) : undefined });
     });
   }

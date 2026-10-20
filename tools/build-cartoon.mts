@@ -15,7 +15,8 @@ import {
 } from './cartoon/head';
 import { Build, GARMENTS, HEADWEAR, bodySkin } from './cartoon/body';
 import { svgDoc } from './cartoon/compose';
-import { CartoonConfig, CartoonItem, CartoonItemSlot, CartoonLayerFile, CartoonManifest, DEFAULT_CARTOON, cartoonLayers } from '../src/cartoon/model';
+import { writeIcons, writePreviews } from './cartoon/finish.mts';
+import { CartoonConfig, CartoonItem, CartoonLayerFile, CartoonManifest, DEFAULT_CARTOON } from '../src/cartoon/model';
 
 const OUT = path.resolve(import.meta.dirname, '../assets/cartoon');
 const DENSITIES = [1, 2];
@@ -128,22 +129,6 @@ const manifest: CartoonManifest = {
 };
 
 // ---------------------------------------------------------------- previews (composited from the PNG layers, like the app)
-/** Composite a config from the built layers (tint = solid color through the layer's alpha). */
-export async function composite(c: CartoonConfig, src: string, d: number): Promise<Buffer> {
-  const parts: sharp.OverlayOptions[] = [];
-  for (const l of cartoonLayers(manifest, c, src)) {
-    const file = path.join(OUT, `${d}x`, l.file.f);
-    let input: Buffer;
-    if (l.file.kind === 'tint') {
-      const meta = await sharp(file).metadata();
-      input = await sharp({ create: { width: meta.width!, height: meta.height!, channels: 4, background: l.color! } })
-        .composite([{ input: file, blend: 'dest-in' }]).png().toBuffer();
-    } else input = await sharp(file).png().toBuffer();
-    parts.push({ input, left: l.file.x * d, top: l.file.y * d });
-  }
-  return sharp({ create: { width: W * d, height: H * d, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(parts).png().toBuffer();
-}
-
 const BASE: Record<Build, CartoonConfig> = {
   female: { ...DEFAULT_CARTOON },
   male: { ...DEFAULT_CARTOON, build: 'male', hair: 'side_part', eyes: 'round', brows: 'straight', top: 'tshirt', topColor: '#3f7fd6', bottom: 'jeans', shoes: 'sneakers' },
@@ -154,56 +139,24 @@ const crops = {
   body: { left: 40, top: 30, width: 320, height: 600 },
   feet: { left: 130, top: 540, width: 140, height: 90 },
 };
-async function preview(slot: CartoonItemSlot, it: CartoonItem) {
-  const b: Build = it.fit === 'male' ? 'male' : 'female';
-  const c: CartoonConfig = { ...BASE[b] };
-  let crop = crops.head;
-  switch (slot) {
-    case 'hair': c.hair = it.id; break;
-    case 'headwear': c.headwear = it.id; c.headwearColor = it.color ?? c.headwearColor; break;
-    case 'eyes': c.eyes = it.id; crop = crops.face; break;
-    case 'brows': c.brows = it.id; crop = crops.face; break;
-    case 'nose': c.nose = it.id; crop = crops.face; break;
-    case 'mouth': c.mouth = it.id; crop = crops.face; break;
-    case 'glasses': c.glasses = it.id; crop = crops.face; break;
-    case 'facialHair': c.facialHair = it.id; c.hair = 'short_crop'; break;
-    case 'top': c.top = it.id; c.topColor = it.color!; c.outfit = null; crop = crops.body; break;
-    case 'bottom': c.bottom = it.id; c.bottomColor = it.color!; c.outfit = null; crop = crops.body; break;
-    case 'outfit': c.outfit = it.id; c.outfitColor = it.color!; crop = crops.body; break;
-    case 'shoes': c.shoes = it.id; c.shoesColor = it.color!; crop = crops.feet; break;
-  }
+await writePreviews(manifest, OUT, BASE, crops, (slot, it, c) => {
+  if (slot === 'facialHair') c.hair = 'short_crop';
   if (slot === 'outfit' && it.modest) c.headwear = null;
-  const full = await composite(c, 'front', 1);
-  const tile = await sharp(full).extract(crop).resize(160, Math.round((160 * crop.height) / crop.width)).webp({ quality: 86, alphaQuality: 90 }).toBuffer();
-  const rel = `previews/${slot}-${it.id}.webp`;
-  writeFileSync(path.join(OUT, rel), tile);
-  it.preview = rel;
-}
-for (const [slot, list] of Object.entries(items) as [CartoonItemSlot, CartoonItem[]][]) for (const it of list) await preview(slot, it);
+});
 
 // section icons for the editor's tab bar: tight crops of the base look
-mkdirSync(path.join(OUT, 'icons'), { recursive: true });
 {
-  const full = await composite({ ...BASE.female, shape: {} }, 'front', 2);
-  const male = await composite({ ...BASE.male, facialHair: 'beard', glasses: 'round' }, 'front', 2);
-  const hijab = await composite({ ...BASE.female, headwear: 'hijab', outfit: 'abaya', outfitColor: '#1f1f24' }, 'front', 2);
-  const box = (x: number, y: number, w: number, h: number) => ({ left: x * 2, top: y * 2, width: w * 2, height: h * 2 });
-  const icons: Record<string, [Buffer, ReturnType<typeof box>]> = {
+  const full = { ...BASE.female, shape: {} };
+  const male = { ...BASE.male, facialHair: 'beard', glasses: 'round' };
+  const hijab = { ...BASE.female, headwear: 'hijab', outfit: 'abaya', outfitColor: '#1f1f24' };
+  const box = (x: number, y: number, w: number, h: number) => ({ x, y, w, h });
+  await writeIcons(manifest, OUT, {
     face: [full, box(95, 60, 210, 210)], eyes: [full, box(140, 150, 120, 60)], brows: [full, box(140, 125, 120, 60)],
     nose: [full, box(170, 175, 60, 50)], mouth: [full, box(165, 200, 70, 50)], hair: [full, box(80, 40, 240, 240)],
     facialHair: [male, box(110, 150, 180, 140)], glasses: [male, box(130, 140, 140, 70)], headwear: [hijab, box(80, 40, 240, 240)],
     outfit: [hijab, box(100, 260, 200, 340)], top: [full, box(110, 270, 180, 170)], bottom: [full, box(130, 400, 140, 200)],
     shoes: [full, box(140, 560, 120, 60)], body: [full, box(60, 30, 280, 590)],
-  };
-  manifest.icons = {};
-  for (const [k, [img, b]] of Object.entries(icons)) {
-    const rel = `icons/${k}.webp`;
-    const side = Math.max(b.width, b.height);
-    const square = await sharp({ create: { width: side, height: side, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-      .composite([{ input: await sharp(img).extract(b).png().toBuffer(), left: Math.round((side - b.width) / 2), top: Math.round((side - b.height) / 2) }]).png().toBuffer();
-    writeFileSync(path.join(OUT, rel), await sharp(square).resize(96, 96).webp({ quality: 88 }).toBuffer());
-    manifest.icons[k] = rel;
-  }
+  });
 }
 
 writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest));
