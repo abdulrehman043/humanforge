@@ -1,0 +1,59 @@
+{
+ "schema": "humanforge.avatar2d",
+ "version": 1,
+ "style": "forge-2d-v2",
+ "face": {
+  "shape": "heart",
+  "skin": "tan",
+  "eyes": "cat",
+  "eyeColor": "#3d2517",
+  "brows": "bold",
+  "nose": "soft",
+  "mouth": "full",
+  "lipColor": "#9c3c58",
+  "cheeks": 2,
+  "freckles": 0,
+  "mole": "none",
+  "eyeshadow": "#00000000",
+  "lashes": true
+ },
+ "hair": {
+  "style": "wavy-long",
+  "color": "#32201a",
+  "highlight": null,
+  "highlightStyle": "balayage"
+ },
+ "headwear": {
+  "style": "none",
+  "color": "#9db69b",
+  "fabric": "jersey",
+  "undercap": false
+ },
+ "outfit": {
+  "top": "knot-shirt",
+  "topColor": "#9cc4ea",
+  "bottom": "flare-jeans",
+  "bottomColor": "#4a4d55",
+  "dress": "none",
+  "dressColor": "#2f5b4a",
+  "outer": "none",
+  "outerColor": "#e6dcc8",
+  "shoes": "chelsea-boots",
+  "shoesColor": "#5a3a2a"
+ },
+ "accessories": {
+  "glasses": "none",
+  "glassesColor": "#25252a",
+  "earrings": "hoop",
+  "metal": "#e0b24c",
+  "necklace": "none",
+  "bag": "none",
+  "bagColor": "#7a5236",
+  "scarf": "none",
+  "scarfColor": "#c4b6e6",
+  "hairAccessory": "none",
+  "hairAccessoryColor": "#f3f0ea"
+ },
+ "expression": "happy",
+ "pose": "chin"
+}

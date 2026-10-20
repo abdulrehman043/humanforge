@@ -1,0 +1,226 @@
+[
+ {
+  "face": {
+   "shape": "oval",
+   "skin": "golden",
+   "eyes": "almond",
+   "brows": "soft",
+   "mouth": "balanced",
+   "eyeColor": "#4f8c5d"
+  },
+  "hair": {
+   "style": "long-center",
+   "color": "#7a5030",
+   "highlight": "#d9ae72",
+   "highlightStyle": "balayage"
+  },
+  "outfit": {
+   "top": "long-sleeve",
+   "topColor": "#2a2b30",
+   "outer": "puffer-crop",
+   "outerColor": "#e6dcc8",
+   "bottom": "wide-jeans",
+   "bottomColor": "#9a9da3",
+   "shoes": "fluffy-boots",
+   "shoesColor": "#7a5236"
+  },
+  "expression": "confident",
+  "pose": "shrug"
+ },
+ {
+  "face": {
+   "shape": "heart",
+   "skin": "tan",
+   "eyes": "cat",
+   "brows": "bold",
+   "mouth": "full",
+   "eyeColor": "#3d2517",
+   "lipColor": "#9c3c58"
+  },
+  "hair": {
+   "style": "wavy-long",
+   "color": "#32201a",
+   "highlight": null
+  },
+  "outfit": {
+   "top": "knot-shirt",
+   "topColor": "#9cc4ea",
+   "outer": "none",
+   "bottom": "flare-jeans",
+   "bottomColor": "#4a4d55",
+   "shoes": "chelsea-boots",
+   "shoesColor": "#5a3a2a"
+  },
+  "accessories": {
+   "earrings": "hoop"
+  },
+  "expression": "happy",
+  "pose": "chin"
+ },
+ {
+  "face": {
+   "shape": "round",
+   "skin": "brown",
+   "eyes": "doe",
+   "brows": "soft",
+   "mouth": "balanced",
+   "eyeColor": "#3d2517"
+  },
+  "headwear": {
+   "style": "hijab-volume",
+   "color": "#c4b6e6",
+   "fabric": "chiffon"
+  },
+  "outfit": {
+   "top": "cable-knit",
+   "topColor": "#e8dcc4",
+   "outer": "none",
+   "bottom": "wide-jeans",
+   "bottomColor": "#36507a",
+   "shoes": "chunky-sneakers",
+   "shoesColor": "#f1efea"
+  },
+  "expression": "happy",
+  "pose": "crossed"
+ },
+ {
+  "face": {
+   "shape": "diamond",
+   "skin": "fair",
+   "eyes": "soft",
+   "brows": "thin",
+   "mouth": "heart",
+   "eyeColor": "#4f86c6",
+   "freckles": 1
+  },
+  "hair": {
+   "style": "wavy-medium",
+   "color": "#c39a62",
+   "highlight": null
+  },
+  "outfit": {
+   "top": "cami",
+   "topColor": "#f0c4c8",
+   "outer": "cardigan",
+   "outerColor": "#e8dcc4",
+   "bottom": "pleated-skirt",
+   "bottomColor": "#3d4048",
+   "shoes": "flats",
+   "shoesColor": "#202126"
+  },
+  "expression": "thoughtful",
+  "pose": "hip"
+ },
+ {
+  "face": {
+   "shape": "round",
+   "skin": "deep",
+   "eyes": "wide",
+   "brows": "straight",
+   "mouth": "wide",
+   "eyeColor": "#3d2517",
+   "lipColor": "#e0705f"
+  },
+  "hair": {
+   "style": "afro-puffs",
+   "color": "#1d1613",
+   "highlight": null
+  },
+  "outfit": {
+   "top": "hoodie",
+   "topColor": "#2f5b4a",
+   "outer": "none",
+   "bottom": "joggers",
+   "bottomColor": "#3d4048",
+   "shoes": "chunky-sneakers",
+   "shoesColor": "#f1efea"
+  },
+  "expression": "excited",
+  "pose": "wave"
+ },
+ {
+  "face": {
+   "shape": "square",
+   "skin": "medium",
+   "eyes": "hooded",
+   "brows": "angled",
+   "mouth": "balanced",
+   "eyeColor": "#92712f",
+   "lipColor": "#b5252f"
+  },
+  "hair": {
+   "style": "pony-high",
+   "color": "#1d1613",
+   "highlight": null
+  },
+  "outfit": {
+   "top": "shirt",
+   "topColor": "#f3f0ea",
+   "outer": "blazer",
+   "outerColor": "#6f7440",
+   "bottom": "trousers",
+   "bottomColor": "#3d4048",
+   "shoes": "loafers",
+   "shoesColor": "#5a3a2a"
+  },
+  "accessories": {
+   "glasses": "round",
+   "glassesColor": "#d8ac4a",
+   "earrings": "drop"
+  },
+  "expression": "confident",
+  "pose": "hip"
+ },
+ {
+  "face": {
+   "shape": "oval",
+   "skin": "light",
+   "eyes": "almond",
+   "brows": "soft",
+   "mouth": "balanced",
+   "eyeColor": "#4f8c5d"
+  },
+  "headwear": {
+   "style": "hijab-alamira",
+   "color": "#202126",
+   "fabric": "jersey"
+  },
+  "outfit": {
+   "dress": "jalabiya",
+   "dressColor": "#2f8a8c",
+   "outer": "none",
+   "shoes": "flats",
+   "shoesColor": "#202126"
+  },
+  "expression": "happy",
+  "pose": "relaxed"
+ },
+ {
+  "face": {
+   "shape": "heart",
+   "skin": "golden",
+   "eyes": "upturned",
+   "brows": "feather",
+   "mouth": "petite",
+   "eyeColor": "#b9792a",
+   "freckles": 2
+  },
+  "hair": {
+   "style": "curly-long",
+   "color": "#b5542a",
+   "highlight": null
+  },
+  "outfit": {
+   "top": "tank",
+   "topColor": "#f3f0ea",
+   "outer": "denim-jacket",
+   "outerColor": "#7396c0",
+   "bottom": "denim-skirt",
+   "bottomColor": "#36507a",
+   "shoes": "knee-boots",
+   "shoesColor": "#5a3a2a"
+  },
+  "expression": "happy",
+  "pose": "shy"
+ }
+]
