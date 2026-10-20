@@ -1,232 +1,45 @@
 # HumanForge
 
 An open-source avatar SDK for React and React Native, built as an open alternative to hosted
-avatar builders such as MetaPerson Creator. It has three modes:
+avatar builders such as MetaPerson Creator. It has two avatar systems:
 
-- **Cartoon 2D** (`humanforge/cartoon`): layered PNG avatars for every device, including low-end
-  Androids. No GL. Five angles, sliders, modest wear. [Jump to it](#cartoon-2d-avatar).
-- **Realistic human** (`humanforge/human`): MakeHuman-based 3D, described below.
-- **Stylized low-poly** (`humanforge/core`): procedural 3D.
+- **Forge2D** (`humanforge/forge2d`): a women-first, full-body **2D** avatar creator drawn entirely as SVG, with hijabs,
+  modest wear, 25 hairstyles, poses, expressions and a compatibility-rules engine. Editors for **React** (`ForgeEditor`) and
+  **React Native** (`ForgeEditorNative`, via `react-native-svg`). No GL, no paid services. [Jump to it](#forge2d-2d-avatar-creator).
+- **Realistic human** (`humanforge/human`): MakeHuman-based 3D humans with sliders, a Mixamo rig and ARKit blendshapes. [Jump to it](#realistic-human).
 
-| | **Realistic human** (`humanforge/human`) | **Stylized low-poly** (`humanforge/core`) |
+| | **Forge2D** (`humanforge/forge2d`) | **Realistic human** (`humanforge/human`) |
 | --- | --- | --- |
-| Look | Photoreal skin, eyes, hair cards, clothes | Flat-colored, procedural |
-| Base | MakeHuman / MPFB2 human (CC0), 26.7k-triangle body | three.js primitives, 7–11k triangles |
-| Customization | 11 macro + 57 detail morph sliders, 20 skins, 9 eye colors, 12 brows, 4 lashes, 19 hairstyles, 28 outfits, 6 shoes | 30+ options |
-| Rig | 52-bone **Mixamo** skeleton with skin weights (clothes and hair follow) | none |
-| Face animation | 34 FACS blendshapes with **ARKit names** (`jawOpen`, `mouthSmile`, `eyeBlinkLeft`, …) | none |
-| Download | ~1.4 MB one-time core + ~0.3–0.8 MB per look (gzipped, cached on device) | 0 (code only) |
-| Export | Compressed GLB (~3 MB with textures, sparse blendshapes) | GLB ~160 KB |
+| Look | Dimensional rendered-cartoon style, full body, fashion-avatar proportions | Photoreal skin, eyes, hair cards, clothes |
+| Base | Procedural SVG (no image files) | MakeHuman / MPFB2 human (CC0), 26.7k-triangle body |
+| Customization | 6 face shapes, 12 skin tones, 25 hairstyles, 15 head coverings (8 hijab wraps), 18 tops, 9 jackets, 16 bottoms, 10 dresses, 9 shoes, 27 accessories, 7 expressions, 7 poses | 11 macro + 57 detail morph sliders, 20 skins, 9 eye colors, 12 brows, 4 lashes, 19 hairstyles, 28 outfits, 6 shoes |
+| Platforms | React (DOM) and React Native (`react-native-svg`) | three.js on web, expo-gl on React Native |
+| Download | 0 (code only) | ~1.4 MB one-time core + ~0.3–0.8 MB per look (gzipped, cached on device) |
+| Export | SVG string, PNG, JSON config | Compressed GLB (~3 MB with textures, sparse blendshapes) |
 
-## Cartoon 2D avatar
+> **0.8.0 is a breaking release.** The stylized low-poly mode (`humanforge/core`, `AvatarView`, `AvatarCreator`) and the layered-PNG
+> cartoon module (`humanforge/cartoon`) were removed to focus on the two systems above. They remain available in git (tags `v0.7.0` and earlier).
+> See [CHANGELOG.md](CHANGELOG.md).
 
-A chibi-style, full-body cartoon avatar made of layered PNGs (the art is generated in code, so it
-is original and CC0). It is built for **every phone, high and low end**: no GL, no WebView, only
-`<Image>` and the native animation driver.
+## Forge2D: 2D avatar creator
 
-![Cartoon avatar](demo/cartoon-preview.png)
-
-```bash
-npx expo install expo-file-system react-native-view-shot   # view-shot only for snapshots
-```
+![Forge2D validation set](docs/forge2d/contact-sheet.png)
 
 ```tsx
-import { CartoonEditor, CartoonView, useCartoonPackage, preloadCartoon } from 'humanforge/cartoon';
+// React (web)
+import { ForgeEditor } from 'humanforge/forge2d/ForgeEditor';
+<ForgeEditor onSave={(config, svg) => api.saveAvatar(config)} />
 
-const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@v0.6.0/assets/cartoon';
-
-// editor screen
-const { pkg, ready } = useCartoonPackage(ASSETS, { config: saved, width: 260 });
-if (!pkg || !ready) return <Loading />;
-<CartoonEditor
-  pkg={pkg}
-  defaultValue={saved}
-  options={{ gender: 'female', modest: true }}      // abaya, jalabiya, maxi dress, hijab, al-amira
-  onSave={(config, pngUri) => api.saveAvatar(config)}
-/>
-
-// anywhere else (profile, chat, lists)
-<CartoonView pkg={pkg} config={saved} width={96} framing="bust" swipe={false} />
+// React Native (npx expo install react-native-svg)
+import { ForgeEditorNative, ForgeAvatarNative } from 'humanforge/forge2d/native';
+<ForgeEditorNative onSave={(config, svg) => api.saveAvatar(config)} />
+<ForgeAvatarNative config={saved} width={96} framing="bust" />
 ```
 
-**What users can change:** 12 skin tones; 5 eye styles + 8 eye colours; 5 brow styles; 4 noses;
-5 mouths + lip colour; 14 hairstyles (14 hair colours); beards (5); glasses (2); headwear (hijab,
-al-amira, kufi, beanie); 8 tops, 5 bottoms, 4 one-piece outfits (abaya, jalabiya, maxi dress,
-dress), 4 shoes, all recolourable; 10 shape sliders (head size, face width, eye size and height,
-brow height, nose size, mouth width and height, build, height); female/male body.
-
-**Same pattern as `HumanEditor`:** the config is plain JSON (`CartoonConfig`); `createCartoonEditor(pkg, options)`
-gives the sections and controls as data; `getCartoonCatalog(pkg)` gives every option with its
-preview tile or colour swatch for custom UIs. Options: `gender`, `modest`, `sections`,
-`exclude` / `include`, `items`, `colors`, `optional`, `sliderRange`, `defaults`, `locked`, `labels`.
-
-### Stylized pack (Bitmoji-like, `cartoon-g3d`)
-
-A second art set for the same `CartoonView`: soft 3D-cartoon people (woman and man) with a fitted
-hijab, abaya, jalabiya and casual outfits, at 3 angles (5 views). Hair, skin, eyes, brows, lips,
-clothes and the hijab all recolour; the face and body sliders work as with the chibi art.
-
-![Stylized cartoon pack](demo/cartoon-g3d-preview.png)
-
-```tsx
-const ASSETS = 'https://cdn.jsdelivr.net/gh/abdulrehman043/humanforge@cartoon-g3d-v0.7.1/assets/cartoon-g3d';
-const { pkg, ready } = useCartoonPackage(ASSETS, { config: saved, width: 260 });
-// modest: createCartoonEditor(pkg, { gender: 'female', modest: true }) -> abaya + hijab by default
-```
-
-It is ~5 MB (186 layers at 1x/2x) and lives on its own git tag, like the mobile texture pack.
-Rebuild it with `npm run g3d:fetch && npm run build:cartoon-g3d` (needs Chrome; ~7 min): the
-characters are rendered in three.js with our CC0 modest wear fitted on, then split into tint and
-shading layers by part (`tools/cartoon-g3d/`). Per-build registration (`buildPivots`) keeps the
-sliders anchored on the taller male head.
-
-### How it stays smooth
-
-| Requirement | How |
-| --- | --- |
-| No GL | Every part is a small trimmed PNG in an `<Image>`; colours use native `tintColor` (white masks + a separate shading layer). |
-| First frame after warm ≤ 300 ms | `useCartoonPackage` / `preloadCartoon` put all layers of the look on disk first; only the visible angle mounts at first (27–36 small images), the others mount right after the first frame; Android `fadeDuration` is 0. |
-| Slider drag without JS stalls | Slider values are `Animated.Value`s handed to the **native driver**; each part's transform is built from them, so a drag only sends numbers to the native side: no React render and no layout per move. The config updates once, on release. |
-| Hair/outfit swap keeps the old look | The new layer set mounts invisibly and replaces the old one only when every image has loaded (double buffering); nothing blanks. Colour changes reuse the mounted images. |
-| Angle swipe at 60 fps | 5 angles (front, ¾ and profile each side; left ones are mirrored right ones, so they share bitmaps). A paging `ScrollView` drives each angle's opacity through `Animated.event` on the native driver: zero JS per frame. |
-| Low memory / fill rate | Layers come in 1x and 2x; `cartoonDensity()` picks 1x unless the avatar is drawn > 760 px wide (GPU fill rate is what limits swiping on weak phones). A look is ~300 KB (1x) / ~650 KB (2x) to download and ~8 MB / ~32 MB decoded for all angles. Hidden angles are moved out of the clip area natively, so they cost no drawing. |
-
-### Acceptance on your devices
-
-`<CartoonBench pkg={pkg} />` is a ready-made test screen: it measures first frame after warm,
-JS frame times while sliders move every frame, swap commit time and the angle swipe, and shows
-PASS/FAIL (and can share the JSON). The UI thread's frame rate can't be measured from JS: watch
-the Perf Monitor (dev menu) on iOS and run `scripts/android-jank.sh <your.package>` on Android
-while swiping and dragging (target: < 5% janky frames).
-
-**Status (0.6.0):**
-- Verified in a browser through react-native-web: layout, tinting, sliders without React
-  re-renders, swaps that keep the old look on a simulated slow network, and the angle swipe.
-- Ran natively in Expo Go on an Android 14 emulator (host GPU, debug JS):
-  - first frame after warm: 66–101 ms
-  - slider drag: 0.06–0.13 ms of JS per update, JS p95 19–24 ms
-  - hair/outfit swap: 93–195 ms, with the old look held
-- Emulator frame times are dominated by its GL translation overhead. Even a plain list scroll
-  there is 6–12% janky; the angle swipe at 1x was 12–15%.
-- **Not yet measured on real phones.** Accept it only after `CartoonBench` and
-  `android-jank.sh` pass on your weak Android and a mid iPhone.
-
-To rebuild or extend the art: `npm run build:cartoon` (sources in `tools/cartoon/`).
-
-### Using commissioned art
-
-The built-in art is generated chibi art. To ship an illustrator's art kit instead, import it into the
-same package format; `CartoonView`, `CartoonEditor` and the cache don't change.
-
-**What the artist delivers**
-
-- Full-canvas **800×1280** PNGs with a transparent background, in `front/`, `three/` (¾, facing
-  right) and `side/` (profile, facing right). The app mirrors them for the left-facing views.
-- One file per sub-layer: `<part key>.<n>.<kind>.png`. Sub-layers paint by `n`; within one `n`
-  the order is `under`, `tint`, `detail`.
-  - `tint`: a pure white mask. The app colours it (skin, hair, fabric…).
-  - `detail`: shading, lines and highlights, drawn as-is over the tint.
-  - `under`: drawn as-is beneath the tint, e.g. an ink outline.
-- Part keys:
-
-  | Part | Key |
-  | --- | --- |
-  | Body (per build, three depth bands) | `body.<female\|male>.<back\|mid\|front>` |
-  | Head (per build) | `head.<female\|male>` |
-  | Ears | `ears.<back\|front>` |
-  | Face parts | `eyes.<style>`, `brows.<style>`, `nose.<style>`, `mouth.<style>`, `facial_hair.<style>`, `glasses.<style>` |
-  | Hair | `hair.<style>.<back\|front>` |
-  | Headwear | `headwear.<style>.<female\|male>` |
-  | Clothes | `<top\|bottom\|outfit\|shoes>.<style>.<female\|male>.<back\|mid\|front>` |
-
-  Styles are lowercase `a-z0-9_`. `glasses` has no colour slot, so it uses `detail` (and `under`) only.
-- A **registration sheet** with these points per angle: neck base, head centre, both eye centres,
-  nose tip and mouth centre.
-
-**What you add next to the kit**
-
-`pivots.json`: copy the points from the registration sheet, in art pixels.
-
-```json
-{
-  "front": { "neck": [400, 492], "head": [400, 308], "eyes": [[360, 329], [440, 329]], "nose": [400, 377], "mouth": [400, 418] },
-  "three": { "neck": [412, 492], "head": [420, 308], "eyes": [[392, 329], [468, 330]], "nose": [478, 377], "mouth": [452, 418] },
-  "side":  { "neck": [430, 492], "head": [440, 308], "eyes": [520, 329], "nose": [568, 377], "mouth": [540, 418] }
-}
-```
-
-The sliders scale and move parts about these points. Head size grows from the neck, face width
-from the head centre, eye size from the eyes, and so on. With the chibi art these points were
-hard-coded; adult proportions need the real ones. Also:
-- `feet` is optional. The importer uses the lowest body or shoe pixel.
-- `brows` is optional and defaults to a little above the eyes.
-- Add `"units": "canvas"` to give the points in 400×640 units instead of pixels.
-- Add `"frames": { "head": {x,y,w,h}, "bust": {…} }` to override the `framing="head"|"bust"`
-  crops. By default they come from the head and neck points.
-
-`items.json`: item metadata you maintain. Every key is optional.
-
-```json
-{
-  "hair":        { "long_wavy": { "fit": "female", "coversEars": true } },
-  "facial_hair": { "beard": { "fit": "male" } },
-  "headwear":    { "hijab": { "fit": "female", "hidesHair": true, "modest": true, "color": "#3b4a6b" } },
-  "outfit":      { "abaya": { "modest": true, "color": "#1f1f24" } },
-  "top":         { "tshirt": { "color": "#3f7fd6" } }
-}
-```
-
-- `fit` defaults to the builds the art was drawn for (both builds = `unisex`); beards default to `male`.
-- `modest` decides what `options.modest` offers.
-- `color` is the default colour when the item is picked. Headwear and clothes without one get a warning.
-- Items are listed in `items.json` order, then the rest alphabetically.
-
-**Import**
-
-```bash
-npm run import:cartoon -- path/to/kit --check
-```
-
-```bash
-npm run import:cartoon -- path/to/kit --out assets/cartoon
-```
-
-`--check` only validates. Without it, the importer validates everything first and writes nothing
-if anything is wrong. It checks:
-- the canvas size and the transparent background
-- that `tint` layers are pure white
-- file names and part keys
-- that every item has art at every angle for each build it fits, and that each build has a head and a body
-- the pivots and `items.json` values
-
-Then it:
-- trims each layer and writes 1x (400×640 units) and 2x (the art's own resolution) PNGs
-- writes `manifest.json`, with `facial_hair` stored as the `facialHair` slot
-- renders a preview tile per item and the editor's section icons from the imported layers
-- clears only `1x/`, `2x/`, `previews/`, `icons/` and `manifest.json` in `--out`
-
-`--pivots` and `--items` point to files outside the kit folder.
-
-Runtime support for this kit format:
-- `head.<build>` keys
-- `under` layers
-- `facial_hair.*` keys
-- neck, head and feet pivots and framings read from the manifest
-
-Packages without them (the built-in art) still use the old `PIVOTS` constants.
-
-**Try it without real art:** `npx tsx tools/cartoon/make-test-kit.mts /tmp/kit` writes a fake kit
-made from the built-in art. It is recoloured, moved up, renamed to the artist's scheme, and has a
-per-build head, an `under` outline and `facial_hair`. It comes with `pivots.json` and `items.json`.
-Import it with `npm run import:cartoon -- /tmp/kit --out /tmp/pkg`.
-
-**See it in the editor locally:**
-1. `npm run demo:kit` makes the fake kit in `.local/test-kit` and imports it to `assets/cartoon-kit` (both gitignored).
-2. `npm run demo:cartoon` starts the react-native-web harness.
-3. Open `/cartoon.html?pkg=cartoon-kit` (add `&gender=male` or `&modest=1`).
-
-For real art, import it with `--out assets/cartoon-kit` and open the same URL.
-`scripts/cartoon-import-test.mts` (part of `npm test`) does the same with broken kits.
+The configuration is plain versioned JSON, shared by both platforms. React Native uses a filter-free "portable" renderer because
+`react-native-svg` does not implement SVG lighting filters natively. The React Native path is verified on react-native-web but
+**not on a physical device yet**. Full documentation, the proportion guide, QA results, known visual limits and how to add assets:
+[docs/FORGE2D.md](docs/FORGE2D.md).
 
 ## Realistic human
 
@@ -563,39 +376,25 @@ avatar picks up the same bias, such as a wider mouth.
   error stays ≤ 0.4 mm. Geometry uses `KHR_mesh_quantization` (no decoder needed), and textures
   are WebP. There's no WASM, so it works on Hermes.
 
-## Stylized low-poly mode
-
-This mode has zero asset files: every part is generated from three.js primitives. An avatar
-serializes to a ~60-character code.
-
-```tsx
-import { AvatarCreator, AvatarView, decodeAvatar } from 'humanforge';
-
-<AvatarCreator onSave={(config, code, view) => api.saveAvatar(code)} />
-<AvatarView config={decodeAvatar(code)} framing="bust" style={{ width: 96, height: 96 }} />
-```
-
-The core works without React (`buildAvatar`, `avatarToGLB` from `humanforge/core`). The editor
-UI is generated from `EDITOR_SCHEMA`. When adding config fields, only append new ones so stored
-codes stay valid.
-
 ## Dev
 
 ```bash
 npm install
 npm run build:human -- <mpfb data> <system assets>   # see above
 npm run build:previews   # option thumbnails + swatches (headless Chrome via puppeteer-core)
-npm test          # both modes: every option builds, codec round-trips, human package decodes, selfie solver
+npm test          # human package decodes, fit and editor, selfie solver, and the Forge2D suite
 npm run typecheck
-npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
+npm run demo      # http://localhost:5173 (landing page: Forge2D editor, human editor, wardrobe)
+npm run demo:forge2d-native   # the React Native Forge2D editor on react-native-web
+npm run qa:forge2d            # pixel QA for Forge2D
 ```
 
 ## Status and limits
 
 - **Verified:** the asset build, the decoder and smoke tests, and the web runtime (shape sliders,
   skins, hair, clothes, rig posing, expressions, GLB export), visually in Chrome.
-- **Not yet run on a device:** the React Native components (`HumanView`, `HumanEditor`, `AvatarView`,
-  `AvatarCreator`). They typecheck against RN 0.81, expo-gl 16 and expo-file-system 19, and use
+- **Not yet run on a device:** the React Native components (`HumanView`, `HumanEditor`, and Forge2D's
+  `ForgeEditorNative` / `ForgeAvatarNative`). They typecheck against RN 0.81, expo-gl 16 and expo-file-system 19, and use
   the standard expo-gl texture path (`{ localUri }`). Test on one iOS and one Android device before
   shipping.
 - **Selfie fit:** verified in Chrome with public-domain portraits (web path). The React Native
@@ -622,7 +421,5 @@ npm run demo      # http://localhost:5173 (stylized) and /human.html (realistic)
 - Selfie fitting: MediaPipe Face Landmarker and its canonical face mesh are Apache-2.0 (Google).
   `src/human/faceMap.ts` contains vertex indices and averaged landmark positions derived from them.
   The model and WASM are downloaded at runtime and aren't bundled.
-- Stylized cartoon pack (`cartoon-g3d`): rendered from the Grab3d "Casual Woman" and "Casual Man"
-  rigged characters ([grab3d.com](https://grab3d.com/models/characters/), CC0 1.0), dressed in the
-  CC0 MakeHuman abaya/jalabiya and our generated hijab; the layers are CC0 1.0.
+- Forge2D artwork: original, drawn in code (no third-party images or models), MIT.
 - No code, meshes or textures from Avatar SDK / MetaPerson or any other proprietary product.

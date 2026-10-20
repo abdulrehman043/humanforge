@@ -1,7 +1,7 @@
 {
   "name": "humanforge",
-  "version": "0.7.0",
-  "description": "Open-source avatar SDK for React and React Native: layered 2D cartoon avatars (no GL), realistic MakeHuman-based 3D humans (CC0) and a procedural low-poly mode.",
+  "version": "0.8.0",
+  "description": "Open-source avatar SDK for React and React Native: realistic MakeHuman-based 3D humans (CC0) and a women-first 2D avatar creator (Forge2D) with hijabs, modest wear and a rules engine.",
   "license": "MIT",
   "author": "abdulrehman043",
   "homepage": "https://github.com/abdulrehman043/humanforge#readme",
@@ -14,7 +14,9 @@
   },
   "keywords": [
     "avatar",
+    "avatar-creator",
     "3d",
+    "2d",
     "react",
     "react-native",
     "expo",
@@ -25,6 +27,9 @@
     "arkit",
     "mixamo",
     "glb",
+    "svg",
+    "hijab",
+    "modest-fashion",
     "metaperson-alternative"
   ],
   "main": "src/index.ts",
@@ -32,18 +37,21 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./core": "./src/core/index.ts",
     "./human": "./src/human/index.ts",
     "./human/export": "./src/human/export.ts",
     "./human/selfie": "./src/human/selfie.ts",
     "./web": "./src/web/index.ts",
     "./native": "./src/native/index.ts",
-    "./cartoon": "./src/cartoon/index.ts"
+    "./forge2d": "./src/forge2d/index.ts",
+    "./forge2d/ForgeEditor": "./src/forge2d/ForgeEditor.tsx",
+    "./forge2d/ForgeAvatar": "./src/forge2d/ForgeAvatar.tsx",
+    "./forge2d/native": "./src/forge2d/native/index.ts"
   },
   "files": [
     "src",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -51,16 +59,14 @@
     "build:human": "tsx tools/build-human.ts",
     "build:garments": "tsx tools/build-garments.mts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/smoke.ts && tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts && tsx scripts/editor-test.mts && tsx scripts/cartoon-test.mts && tsx scripts/cartoon-import-test.mts",
+    "test": "tsx scripts/human-smoke.mts && tsx scripts/fit-test.mts && tsx scripts/editor-test.mts && tsx scripts/forge2d-test.mts",
     "build:facemap": "tsx tools/build-facemap.mts",
     "build:previews": "tsx tools/build-previews.mts",
     "build:mobile": "tsx tools/build-mobile-textures.mts",
-    "build:cartoon": "tsx tools/build-cartoon.mts",
-    "import:cartoon": "tsx tools/import-cartoon-art.mts",
-    "demo:cartoon": "vite --config vite.rnw.config.ts",
-    "demo:kit": "tsx tools/cartoon/make-test-kit.mts .local/test-kit && tsx tools/import-cartoon-art.mts .local/test-kit --out assets/cartoon-kit",
-    "g3d:fetch": "mkdir -p .local/g3d && for n in woman man; do curl -fsSL -o .local/g3d/$n-rigged.glb https://grab3d.com/dl/$n-rigged/$n-rigged.glb; done",
-    "build:cartoon-g3d": "tsx tools/cartoon-g3d/kit.mts render && tsx tools/cartoon-g3d/kit.mts compose && tsx tools/import-cartoon-art.mts .local/kit-g3d --out assets/cartoon-g3d"
+    "demo:forge2d": "vite --config vite.forge2d.config.ts",
+    "demo:forge2d-native": "vite --config vite.forge2d-native.config.ts",
+    "qa:forge2d": "tsx tools/forge2d/qa.mts",
+    "sheet:forge2d": "tsx tools/forge2d/contact-sheet.mts"
   },
   "peerDependencies": {
     "@gltf-transform/core": ">=4",
@@ -71,8 +77,8 @@
     "expo-gl": ">=13",
     "react": ">=18",
     "react-native": ">=0.72",
-    "three": ">=0.160",
-    "react-native-view-shot": ">=3"
+    "react-native-view-shot": ">=3",
+    "three": ">=0.160"
   },
   "peerDependenciesMeta": {
     "expo-gl": {
@@ -101,6 +107,9 @@
     },
     "react-native-view-shot": {
       "optional": true
+    },
+    "react-native-svg": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -120,6 +129,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-native": "^0.81.6",
+    "react-native-svg": "^15.16.0",
     "react-native-view-shot": "^4.0.3",
     "react-native-web": "^0.21.4",
     "sharp": "^0.35.5",
