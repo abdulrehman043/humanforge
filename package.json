@@ -1,6 +1,6 @@
 {
   "name": "humanforge",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Open-source avatar SDK for React and React Native: realistic MakeHuman-based 3D humans (CC0) and a women-first 2D avatar creator (Forge2D) with hijabs, modest wear and a rules engine.",
   "license": "MIT",
   "author": "abdulrehman043",

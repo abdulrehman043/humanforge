@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.1
+
+### Changed
+- **Forge2D native performance.** `ForgeEditorNative` option chips are baked WebP files, not live SVG; only the hero preview is SVG
+  (`fast` while editing, full quality after 450 ms idle). Changing one part no longer redraws other chips.
+
+### Added
+- `THUMBS` exported from `humanforge/forge2d/native` (`<category>/<optionId>` -> image source), for custom editor UIs.
+- `ForgeAvatarNative` `fast` prop (default: on for crops under 300 units tall).
+- `npm run build:thumbs-forge2d` regenerates the thumbnails.
+
 ## 0.8.0
 
 **Breaking: focus on two avatar systems, the realistic human and the new Forge2D creator.**
