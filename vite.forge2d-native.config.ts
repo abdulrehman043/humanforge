@@ -4,7 +4,14 @@ import path from 'node:path';
 const here = import.meta.dirname;
 // react-native-web harness for the React Native Forge2D editor (demo/forge2d-native.html): runs the real RN code and
 // react-native-svg's web build in a browser to check layout and logic. Device performance must still be measured on phones.
+// Metro resolves `require('./x.webp')` to an asset id; in the browser harness turn those into URLs.
+const metroAssets = { name: 'metro-asset-require', transform(code: string, id: string) {
+  if (!id.endsWith('thumbs.generated.ts')) return null;
+  return code.replace(/require\(["']([^"']+)["']\)/g, (_m, f) => `new URL('${f}', import.meta.url).href`);
+} };
+
 export default defineConfig({
+  plugins: [metroAssets],
   root: path.join(here, 'demo'),
   publicDir: path.join(here, 'assets'),
   resolve: {

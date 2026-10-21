@@ -93,6 +93,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 The configuration is plain JSON, so the same avatar works on both platforms. `renderAvatarSvg(config, { portable: true })` returns
 the exact SVG the native components draw, if you want to render it some other way.
 
+**Phone performance.** In `ForgeEditorNative` only the big preview is live SVG (drawn with `fast` while taps arrive, upgraded to
+full quality after 450 ms idle). Option chips are baked WebP files in `src/forge2d/native/thumbs/` (neutral base, so they don't follow
+your skin or hair colour), which means changing eyes never redraws a chip. After adding or changing an option run
+`npm run build:thumbs-forge2d` and commit the regenerated files. `ForgeAvatarNative` takes `fast` (default: on for crops under 300 units tall).
+
 **Why a separate "portable" renderer.** The web look uses SVG lighting filters (`feDiffuseLighting`). I checked the installed
 `react-native-svg` 15.16 source: its JS declares those elements, but its native iOS and Android code implements only Blend,
 ColorMatrix, Composite, Flood, GaussianBlur, Merge and Offset. So on native the same volume is built **without any filter**: stepped inner

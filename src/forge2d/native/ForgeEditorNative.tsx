@@ -2,7 +2,7 @@
 // Uses only View / Text / Pressable / ScrollView / TextInput and react-native-svg's SvgXml with the portable
 // (filter-free) renderer, so it needs no native module beyond react-native-svg (optional peer, >= 13).
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { renderAvatarSvg } from '../render';
 import { CANVAS, hashId } from '../geom';
@@ -13,22 +13,11 @@ import { randomConfig } from '../random';
 import { AvatarStore, exportConfig, importConfig } from '../storage';
 import { normalizeConfig, ValidationIssue } from '../validate';
 import type { AvatarConfig } from '../types';
-import { CROP, EDITOR_TABS, SectionDef, clone, getPath, previewBase, relevantKey, setPath, thumbKey, thumbTint } from '../editorModel';
+import { CROP, EDITOR_TABS, SectionDef, clone, getPath, setPath } from '../editorModel';
+import { THUMBS } from './thumbs.generated';
 import { SKIN_TONES, Swatch } from '../palette';
 
 const C = { bg: '#f5f3fb', card: '#ffffff', ink: '#241f3a', mute: '#7a7592', line: '#e6e2f2', accent: '#6c4cf0', soft: '#eee9ff', bad: '#c2394b' };
-
-// thumbnails are generated as SVG strings once and kept (keyed by the state they show)
-const xmlCache = new Map<string, string>();
-function thumbXml(key: string, make: () => string): string {
-  let x = xmlCache.get(key);
-  if (!x) {
-    x = make();
-    xmlCache.set(key, x);
-    if (xmlCache.size > 500) xmlCache.delete(xmlCache.keys().next().value as string);
-  }
-  return x;
-}
 
 interface Opt { id: string; name: string }
 
@@ -61,32 +50,25 @@ function Seg({ value, options, onPick }: { value: unknown; options: { v: string 
   );
 }
 
-const Thumb = React.memo(function Thumb({ cat, path, base, baseKey, tint, opt, selected, disabled, size, onPick }: {
-  cat: Category; path: string; base: AvatarConfig; baseKey: string; tint?: string; opt: Opt; selected: boolean; disabled: boolean; size: number; onPick: (id: string) => void;
+// Chips are baked WebP files (tools/forge2d/build-thumbs.mts), never live SVG: nothing to render or re-render when
+// another part of the avatar changes, and the bitmap decode is cached by the OS image pipeline.
+const Thumb = React.memo(function Thumb({ cat, opt, selected, disabled, size, onPick }: {
+  cat: Category; opt: Opt; selected: boolean; disabled: boolean; size: number; onPick: (id: string) => void;
 }) {
-  const xml = useMemo(() => {
-    if (opt.id === 'none') return '';
-    try {
-      const cfg = tint ? setPath(setPath(base, path, opt.id), TINT_PATH_FOR[cat], tint) : setPath(base, path, opt.id);
-      const key = thumbKey(cat, path, opt.id, tint, baseKey);
-      return thumbXml(key, () => renderAvatarSvg(cfg, { portable: true, fast: true, viewBox: CROP[cat], width: 160, uid: `t${hashId(key)}` }));
-    } catch { return ''; }
-  }, [baseKey, path, opt.id, cat, tint]);
+  const src = opt.id === 'none' ? undefined : THUMBS[`${cat}/${opt.id}`];
   const crop = CROP[cat];
   const box = size - 14;
-  const h = box;
   return (
     <Pressable onPress={() => onPick(opt.id)} disabled={disabled} accessibilityRole="button" accessibilityLabel={opt.name} accessibilityState={{ selected, disabled }}
       style={[s.opt, { width: size }, selected && s.optOn, disabled && { opacity: 0.38 }]}>
-      <View style={[s.thumb, { width: box, height: h }]}>
-        {opt.id === 'none' ? <Text style={s.noneBig}>∅</Text> : xml ? <SvgXml xml={xml} width={box} height={Math.min(h, box * (crop[3] / crop[2]))} /> : null}
+      <View style={[s.thumb, { width: box, height: box }]}>
+        {opt.id === 'none' ? <Text style={s.noneBig}>∅</Text> : src ? <Image source={src} resizeMode="contain" fadeDuration={0} style={{ width: box, height: Math.min(box, box * (crop[3] / crop[2])) }} /> : <Text style={s.noneBig}>·</Text>}
       </View>
       <Text numberOfLines={2} style={s.optLabel}>{opt.name}</Text>
       {selected && <View style={s.check}><Text style={s.checkText}>✓</Text></View>}
     </Pressable>
   );
 });
-const TINT_PATH_FOR: Record<string, string> = { top: 'outfit.topColor', outer: 'outfit.outerColor', dress: 'outfit.dressColor', bottom: 'outfit.bottomColor', shoes: 'outfit.shoesColor' };
 
 export interface ForgeEditorNativeProps {
   defaultValue?: AvatarConfig;
@@ -121,7 +103,10 @@ export function ForgeEditorNative({ defaultValue, onChange, onSave, store: store
     setIssues([]);
   };
   const resolved = useMemo(() => resolveConfig(cfg), [cfg]);
-  const previewXml = useMemo(() => renderAvatarSvg(cfg, { portable: true, viewBox: zoom ? [50, 12, 300, 340] : undefined, width: 400, uid: `m${hashId(JSON.stringify(cfg) + zoom)}` }), [cfg, zoom]);
+  // the hero is cheap (`fast`) while taps are arriving and upgrades to full quality once the user pauses
+  const [settled, setSettled] = useState(true);
+  useEffect(() => { setSettled(false); const t = setTimeout(() => setSettled(true), 450); return () => clearTimeout(t); }, [cfg, zoom]);
+  const previewXml = useMemo(() => renderAvatarSvg(cfg, { portable: true, fast: !settled, viewBox: zoom ? [50, 12, 300, 340] : undefined, width: 400, uid: `m${hashId(JSON.stringify(cfg) + zoom)}${settled ? 'q' : 'f'}` }), [cfg, zoom, settled]);
   const aspect = zoom ? 340 / 300 : CANVAS.h / CANVAS.w;
 
   const randomize = () => { setSeed((n) => n + 1); setCfg(randomConfig(seed * 7919 + (Date.now() % 9973))); setIssues([]); };
@@ -137,17 +122,15 @@ export function ForgeEditorNative({ defaultValue, onChange, onSave, store: store
   const renderSection = (sec: SectionDef, i: number) => {
     if ('showIf' in sec && sec.showIf && !sec.showIf(cfg)) return null;
     if (sec.kind === 'options') {
-      const base = previewBase(sec.cat, cfg);
-      const baseKey = relevantKey(sec.cat, base);
       const list: Opt[] = sec.optional ? [{ id: 'none', name: 'None' }, ...opts(sec.cat)] : opts(sec.cat);
       const current = getPath(cfg, sec.path) as string;
       return (
         <View key={i} style={s.sec}>
           <Text style={s.secTitle}>{sec.title}</Text>
           <View style={s.grid}>
-            {list.map((o, k) => {
+            {list.map((o) => {
               const errs = o.id === 'none' ? [] : errorsIfSet(cfg, sec.path, o.id);
-              return <Thumb key={o.id} cat={sec.cat} path={sec.path} base={base} baseKey={baseKey} tint={thumbTint(sec.cat, o.id, k)} opt={o} size={tile} selected={current === o.id} disabled={errs.length > 0} onPick={(id) => set(sec.path, id, sec.also)} />;
+              return <Thumb key={o.id} cat={sec.cat} opt={o} size={tile} selected={current === o.id} disabled={errs.length > 0} onPick={(id) => set(sec.path, id, sec.also)} />;
             })}
           </View>
         </View>

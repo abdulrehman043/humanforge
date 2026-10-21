@@ -23,13 +23,16 @@ export interface ForgeAvatarNativeProps {
   framing?: Framing;
   /** a custom crop (canvas units), overrides `framing` */
   viewBox?: [number, number, number, number];
+  /** skip soft blurs and shadows: cheaper to render, slightly flatter. Defaults to on for small crops (< 300 units tall). */
+  fast?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
-export function ForgeAvatarNative({ config, width = 160, framing = 'full', viewBox, style }: ForgeAvatarNativeProps) {
+export function ForgeAvatarNative({ config, width = 160, framing = 'full', viewBox, fast, style }: ForgeAvatarNativeProps) {
   const vb = viewBox ?? FRAMES[framing];
-  const key = JSON.stringify(config) + (vb ? vb.join(',') : '');
-  const xml = useMemo(() => renderAvatarSvg(config, { portable: true, fast: !!vb && vb[3] < 300, viewBox: vb, width: 400, uid: `n${hashId(key)}` }), [key]);
+  const isFast = fast ?? (!!vb && vb[3] < 300);
+  const key = JSON.stringify(config) + (vb ? vb.join(',') : '') + (isFast ? 'f' : '');
+  const xml = useMemo(() => renderAvatarSvg(config, { portable: true, fast: isFast, viewBox: vb, width: 400, uid: `n${hashId(key)}` }), [key]);
   const aspect = vb ? vb[3] / vb[2] : CANVAS.h / CANVAS.w;
   return <SvgXml xml={xml} width={width} height={width * aspect} style={style} />;
 }
